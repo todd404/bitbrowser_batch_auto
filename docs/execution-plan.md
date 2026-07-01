@@ -172,6 +172,7 @@
   --url https://example.com
 .venv/bin/python -m bitbrowser_auto import-tasks configs/tasks.example.yaml --replace
 .venv/bin/python -m bitbrowser_auto list-tasks
+.venv/bin/python -m unittest discover -s tests
 ```
 
 真实链路验证结果：
@@ -188,7 +189,7 @@
 1. 完善 Scheduler 失败重试的 trace/run 记录和 browser_runtime 的 ws/pid 回写。
 2. 加入 Python flow 的示例任务和回归验证。
 3. 增加 `trace-to-flow` 初稿生成。
-4. 补单元测试覆盖 FlowValidator、Storage 和 Scheduler claim 逻辑。
+4. 扩展单元测试覆盖 Scheduler 并发和失败重试逻辑。
 
 ## Phase 5: Declarative Flow Runner
 
