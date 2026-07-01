@@ -13,6 +13,7 @@ from bitbrowser_auto.observability.artifacts import utc_now_iso
 
 from .declarative import DeclarativeRunner
 from .flow_loader import load_declarative_flow
+from .flow_validator import FlowValidator
 from .python_flow import run_python_flow
 from .task import RunContext, Task
 
@@ -61,6 +62,9 @@ async def run_one_task(
 
         if task.flow_type == "declarative":
             flow = load_declarative_flow(config.paths.declarative_flow_dir, task.flow)
+            validation = FlowValidator().validate(flow)
+            if not validation.ok:
+                raise ValueError("Invalid declarative flow: " + "; ".join(validation.errors))
             runner = DeclarativeRunner()
             result = await runner.run(ctx, flow)
             outputs = result["outputs"]

@@ -12,6 +12,8 @@ from .bitbrowser import BitBrowserClient
 from .browser import PlaywrightConnector
 from .config import load_config
 from .runner.flow_loader import load_tasks
+from .runner.flow_loader import load_declarative_flow
+from .runner.flow_validator import FlowValidator
 from .runner.scheduler import Scheduler
 from .runner.service import run_one_task, task_from_mapping
 from .runner.task import Task
@@ -66,6 +68,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--replace", action="store_true", help="Replace existing tasks when importing --tasks.")
     run.add_argument("--once", action="store_true", help="Exit after current pending tasks finish.")
 
+    validate_flow = subparsers.add_parser("validate-flow", help="Validate a declarative flow file.")
+    validate_flow.add_argument("flow", help="Flow name or YAML/JSON path.")
+    validate_flow.add_argument("--config", default=None, help="Path to app config YAML.")
+
     return parser
 
 
@@ -91,6 +97,8 @@ def main(argv: list[str] | None = None) -> None:
             result = _cmd_reset_running(args)
         elif args.command == "run":
             result = asyncio.run(_cmd_run(args))
+        elif args.command == "validate-flow":
+            result = _cmd_validate_flow(args)
         else:
             parser.error(f"unknown command: {args.command}")
             return
@@ -99,6 +107,8 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(1) from exc
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    if result.get("status") == "failed":
+        raise SystemExit(1)
 
 
 async def _cmd_check(args: argparse.Namespace) -> dict[str, Any]:
@@ -215,6 +225,18 @@ def _cmd_reset_running(args: argparse.Namespace) -> dict[str, Any]:
         return {"status": "success", "sqlite": str(config.paths.sqlite), "reset": count, "as_status": reset_status}
     finally:
         storage.close()
+
+
+def _cmd_validate_flow(args: argparse.Namespace) -> dict[str, Any]:
+    config = load_config(args.config)
+    flow = load_declarative_flow(config.paths.declarative_flow_dir, args.flow)
+    result = FlowValidator().validate(flow)
+    return {
+        "status": "success" if result.ok else "failed",
+        "ok": result.ok,
+        "errors": result.errors,
+        "warnings": result.warnings,
+    }
 
 
 async def _cmd_run(args: argparse.Namespace) -> dict[str, Any]:

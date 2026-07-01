@@ -1,0 +1,16 @@
+name: "open_and_get_title"
+version: 1
+inputs:
+  url:
+    type: string
+    required: true
+steps:
+  - action: goto
+    url: "{{ inputs.url }}"
+  - action: playwright
+    target: page
+    method: title
+    save_as: title
+  - action: screenshot
+    name: "final"
+    full_page: true

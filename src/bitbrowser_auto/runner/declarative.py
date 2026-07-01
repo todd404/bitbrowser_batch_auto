@@ -10,6 +10,57 @@ from .task import RunContext
 
 TEMPLATE_PATTERN = re.compile(r"{{\s*([^}]+?)\s*}}")
 
+CORE_ACTION_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "goto": ("url",),
+    "click": ("selector",),
+    "fill": ("selector", "value"),
+    "press": ("selector", "key"),
+    "wait_for": ("selector",),
+    "wait_for_url": ("url",),
+    "extract_text": ("selector", "save_as"),
+    "extract_attr": ("selector", "attr", "save_as"),
+    "screenshot": (),
+    "assert_text": ("selector", "text"),
+    "if_visible": ("selector", "then"),
+    "if_text": ("selector", "text", "then"),
+    "playwright": ("target", "method"),
+}
+
+ALLOWED_PLAYWRIGHT_TARGETS = {"page", "context", "locator", "keyboard", "mouse"}
+ALLOWED_PLAYWRIGHT_METHODS: dict[str, set[str]] = {
+    "page": {
+        "go_back",
+        "go_forward",
+        "goto",
+        "locator",
+        "reload",
+        "screenshot",
+        "title",
+        "wait_for_load_state",
+        "wait_for_timeout",
+        "wait_for_url",
+    },
+    "context": {"new_page"},
+    "locator": {
+        "check",
+        "click",
+        "count",
+        "fill",
+        "first",
+        "get_attribute",
+        "inner_text",
+        "is_visible",
+        "last",
+        "nth",
+        "press",
+        "screenshot",
+        "select_option",
+        "wait_for",
+    },
+    "keyboard": {"press", "type"},
+    "mouse": {"click", "dblclick", "down", "move", "up", "wheel"},
+}
+
 
 @dataclass
 class DeclarativeRunner:
@@ -126,7 +177,39 @@ class DeclarativeRunner:
                     await self._run_step(ctx, child, outputs, len(self.trace_steps) + 1)
             return None
 
+        if action == "if_text":
+            selector = render_template(str(step["selector"]), ctx, outputs)
+            expected = render_template(str(step["text"]), ctx, outputs)
+            text = await page.locator(selector).inner_text(timeout=step.get("timeout_ms"))
+            if expected in text:
+                for child in step.get("then", []):
+                    await self._run_step(ctx, child, outputs, len(self.trace_steps) + 1)
+            return None
+
+        if action == "playwright":
+            return await self._run_playwright(ctx, step, outputs)
+
         raise ValueError(f"Unsupported declarative action: {action}")
+
+    async def _run_playwright(self, ctx: RunContext, step: dict[str, Any], outputs: dict[str, Any]) -> Any:
+        target_name = str(step["target"])
+        method_name = str(step["method"])
+        target = _resolve_target(ctx, target_name)
+        result = await _call_allowed(target_name, target, method_name, step, ctx, outputs)
+
+        current_target_name = _next_target_name(target_name, method_name)
+        for link in step.get("chain", []) or []:
+            if not current_target_name:
+                raise ValueError(f"Cannot chain after {target_name}.{method_name}")
+            method_name = str(link["method"])
+            result = await _call_allowed(current_target_name, result, method_name, link, ctx, outputs)
+            current_target_name = _next_target_name(current_target_name, method_name)
+
+        save_as = step.get("save_as")
+        if save_as:
+            outputs[str(save_as)] = await _serialize_result(result)
+            return {"save_as": save_as}
+        return await _traceable_result(result)
 
 
 def render_template(value: str, ctx: RunContext, outputs: dict[str, Any]) -> str:
@@ -147,3 +230,85 @@ def render_template(value: str, ctx: RunContext, outputs: dict[str, Any]) -> str
         raise KeyError(f"Unsupported template variable: {expr}")
 
     return TEMPLATE_PATTERN.sub(replace, value)
+
+
+def _resolve_target(ctx: RunContext, target_name: str) -> Any:
+    if target_name == "page":
+        return ctx.page
+    if target_name == "context":
+        return ctx.context
+    if target_name == "keyboard":
+        return ctx.page.keyboard
+    if target_name == "mouse":
+        return ctx.page.mouse
+    if target_name == "locator":
+        return ctx.page
+    raise ValueError(f"Unsupported Playwright target: {target_name}")
+
+
+async def _call_allowed(
+    target_name: str,
+    target: Any,
+    method_name: str,
+    spec: dict[str, Any],
+    ctx: RunContext,
+    outputs: dict[str, Any],
+) -> Any:
+    if method_name not in ALLOWED_PLAYWRIGHT_METHODS.get(target_name, set()):
+        raise ValueError(f"Playwright method not allowed: {target_name}.{method_name}")
+
+    if target_name == "locator" and target is ctx.page:
+        selector = spec.get("selector")
+        if not selector:
+            raise ValueError("locator target requires selector")
+        target = ctx.page.locator(render_template(str(selector), ctx, outputs))
+
+    args = _render_value(spec.get("args", []), ctx, outputs)
+    kwargs = _render_value(spec.get("kwargs", {}), ctx, outputs)
+    if not isinstance(args, list):
+        raise ValueError("playwright args must be a list")
+    if not isinstance(kwargs, dict):
+        raise ValueError("playwright kwargs must be a mapping")
+
+    method = getattr(target, method_name)
+    result = method(*args, **kwargs)
+    if hasattr(result, "__await__"):
+        result = await result
+    return result
+
+
+def _render_value(value: Any, ctx: RunContext, outputs: dict[str, Any]) -> Any:
+    if isinstance(value, str):
+        return render_template(value, ctx, outputs)
+    if isinstance(value, list):
+        return [_render_value(item, ctx, outputs) for item in value]
+    if isinstance(value, dict):
+        return {key: _render_value(item, ctx, outputs) for key, item in value.items()}
+    return value
+
+
+def _next_target_name(target_name: str, method_name: str) -> str | None:
+    if target_name == "page" and method_name == "locator":
+        return "locator"
+    if target_name == "context" and method_name == "new_page":
+        return "page"
+    if target_name == "locator" and method_name in {"first", "last", "nth"}:
+        return "locator"
+    return None
+
+
+async def _serialize_result(result: Any) -> Any:
+    if isinstance(result, (str, int, float, bool)) or result is None:
+        return result
+    if isinstance(result, list):
+        return [await _serialize_result(item) for item in result]
+    if isinstance(result, dict):
+        return {str(key): await _serialize_result(value) for key, value in result.items()}
+    return str(result)
+
+
+async def _traceable_result(result: Any) -> Any:
+    serialized = await _serialize_result(result)
+    if serialized is None:
+        return None
+    return {"result": serialized}

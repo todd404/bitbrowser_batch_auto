@@ -144,11 +144,18 @@
   - `task_runs`
   - `browser_runtime`
 - 轻量 Scheduler：`run --tasks ... --once`
+- FlowValidator：`validate-flow`
+- Declarative passthrough：
+  - `action: playwright`
+  - target allowlist: `page`、`context`、`locator`、`keyboard`、`mouse`
+  - method allowlist 已覆盖常见导航、locator、键盘、鼠标动作
 
 本机已验证命令：
 
 ```bash
 .venv/bin/python -m bitbrowser_auto --help
+.venv/bin/python -m bitbrowser_auto validate-flow open_and_check
+.venv/bin/python -m bitbrowser_auto validate-flow open_and_get_title
 .venv/bin/python -m bitbrowser_auto check
 .venv/bin/python -m bitbrowser_auto check \
   --browser-id 2357d261d2d2472985d52e7916d6a580 \
@@ -157,6 +164,11 @@
   --browser-id 2357d261d2d2472985d52e7916d6a580 \
   --task-id demo-001 \
   --flow open_and_check \
+  --url https://example.com
+.venv/bin/python -m bitbrowser_auto run-one \
+  --browser-id 2357d261d2d2472985d52e7916d6a580 \
+  --task-id passthrough-demo-001 \
+  --flow open_and_get_title \
   --url https://example.com
 .venv/bin/python -m bitbrowser_auto import-tasks configs/tasks.example.yaml --replace
 .venv/bin/python -m bitbrowser_auto list-tasks
@@ -169,13 +181,14 @@
 - `/browser/open` 获取到最新 `ws`。
 - Playwright `connect_over_cdp(ws)` 成功访问 `https://example.com/`。
 - 已生成截图、`run.json`、`trace.json`。
+- `open_and_get_title` passthrough flow 成功通过 `page.title()` 提取 `Example Domain`。
 
 下一步建议：
 
-1. 补 FlowValidator，先校验 declarative flow 的 action、必填字段和模板变量。
-2. 扩展 declarative action：`playwright` passthrough、`if_text`。
-3. 完善 Scheduler 失败重试的 trace/run 记录和 browser_runtime 的 ws/pid 回写。
-4. 加入 Python flow 的示例任务和回归验证。
+1. 完善 Scheduler 失败重试的 trace/run 记录和 browser_runtime 的 ws/pid 回写。
+2. 加入 Python flow 的示例任务和回归验证。
+3. 增加 `trace-to-flow` 初稿生成。
+4. 补单元测试覆盖 FlowValidator、Storage 和 Scheduler claim 逻辑。
 
 ## Phase 5: Declarative Flow Runner
 

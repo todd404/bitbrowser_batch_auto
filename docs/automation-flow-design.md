@@ -107,6 +107,30 @@ assert_text
         timeout: 30000
 ```
 
+当前实现已支持受 allowlist 限制的 passthrough。示例：
+
+```yaml
+name: "open_and_get_title"
+version: 1
+inputs:
+  url:
+    type: string
+    required: true
+steps:
+  - action: goto
+    url: "{{ inputs.url }}"
+  - action: playwright
+    target: page
+    method: title
+    save_as: title
+```
+
+执行前可先校验：
+
+```bash
+python -m bitbrowser_auto validate-flow open_and_get_title
+```
+
 passthrough 设计原则：
 
 - 支持 `page`、`context`、`locator`、`keyboard`、`mouse` 等常用 target。
