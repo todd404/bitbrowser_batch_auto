@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bitbrowser-auto"
+version = "0.1.0"
+description = "Local BitBrowser automation runner with Playwright CDP control."
+readme = "docs/project-framework.md"
+requires-python = ">=3.9"
+dependencies = [
+  "httpx>=0.27",
+  "playwright>=1.45",
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+bitbrowser-auto = "bitbrowser_auto.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

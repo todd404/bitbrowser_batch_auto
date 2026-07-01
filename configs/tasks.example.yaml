@@ -1,0 +1,8 @@
+tasks:
+  - id: "demo-001"
+    browser_id: "replace-with-bitbrowser-window-id"
+    flow_type: "declarative"
+    flow: "open_and_check"
+    inputs:
+      url: "https://example.com"
+

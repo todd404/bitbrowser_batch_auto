@@ -1,0 +1,35 @@
+bitbrowser:
+  base_url: "http://127.0.0.1:54345"
+  request_timeout_seconds: 30
+
+scheduler:
+  max_concurrent_windows: 3
+  open_interval_seconds: 2
+  task_timeout_seconds: 300
+  close_window_after_task: false
+  close_wait_seconds: 5
+  max_retries: 1
+  recover_running_tasks_as: "pending"
+
+paths:
+  sqlite: "data/scheduler.sqlite3"
+  artifact_dir: "artifacts"
+  declarative_flow_dir: "flows/declarative"
+  python_flow_dir: "flows/py"
+
+playwright:
+  default_navigation_timeout_ms: 60000
+  default_action_timeout_ms: 30000
+
+trace:
+  enabled: true
+  screenshot_policy: "on_error"
+
+ui:
+  default_mode: "desktop"
+  host: "127.0.0.1"
+  port: 0
+  title: "BitBrowser Auto"
+  window_width: 1200
+  window_height: 800
+
