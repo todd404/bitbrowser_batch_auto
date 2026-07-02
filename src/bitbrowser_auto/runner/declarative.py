@@ -5,6 +5,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from bitbrowser_auto.observability.trace import maybe_capture_step_screenshot, step_metadata
+
 from .task import RunContext
 
 
@@ -64,6 +66,7 @@ ALLOWED_PLAYWRIGHT_METHODS: dict[str, set[str]] = {
 
 @dataclass
 class DeclarativeRunner:
+    screenshot_policy: str = "on_error"
     trace_steps: list[dict[str, Any]] = field(default_factory=list)
 
     async def run(self, ctx: RunContext, flow: dict[str, Any]) -> dict[str, Any]:
@@ -90,17 +93,21 @@ class DeclarativeRunner:
 
         started = time.perf_counter()
         trace: dict[str, Any] = {"index": index, "action": action, "ok": False}
+        trace.update(step_metadata(step))
         try:
             result = await self._dispatch(ctx, step, outputs)
             trace["ok"] = True
             if result is not None:
                 trace["result"] = result
+                if action == "screenshot" and isinstance(result, dict) and result.get("path"):
+                    trace["screenshot"] = result["path"]
         except Exception as exc:
             trace["error"] = str(exc)
             raise
         finally:
             trace["url"] = getattr(ctx.page, "url", None)
             trace["elapsed_ms"] = round((time.perf_counter() - started) * 1000)
+            await maybe_capture_step_screenshot(ctx, trace, policy=self.screenshot_policy)
             self.trace_steps.append(trace)
 
     async def _dispatch(self, ctx: RunContext, step: dict[str, Any], outputs: dict[str, Any]) -> Any:

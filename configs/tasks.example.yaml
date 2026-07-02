@@ -6,3 +6,10 @@ tasks:
     inputs:
       url: "https://example.com"
 
+  - id: "python-demo-001"
+    browser_id: "replace-with-bitbrowser-window-id"
+    flow_type: "python"
+    flow: "paginate_titles"
+    inputs:
+      urls:
+        - "https://example.com"

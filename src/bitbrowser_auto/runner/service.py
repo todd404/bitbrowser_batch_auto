@@ -10,11 +10,12 @@ from bitbrowser_auto.browser import PlaywrightConnector
 from bitbrowser_auto.config import AppConfig
 from bitbrowser_auto.observability import ArtifactManager
 from bitbrowser_auto.observability.artifacts import utc_now_iso
+from bitbrowser_auto.observability.trace import is_screenshot_error
 
 from .declarative import DeclarativeRunner
 from .flow_loader import load_declarative_flow
 from .flow_validator import FlowValidator
-from .python_flow import run_python_flow
+from .python_flow import PythonRunner
 from .task import RunContext, Task
 
 
@@ -65,12 +66,21 @@ async def run_one_task(
             validation = FlowValidator().validate(flow)
             if not validation.ok:
                 raise ValueError("Invalid declarative flow: " + "; ".join(validation.errors))
-            runner = DeclarativeRunner()
-            result = await runner.run(ctx, flow)
-            outputs = result["outputs"]
-            trace = result["trace"]
+            runner = DeclarativeRunner(screenshot_policy=config.trace.screenshot_policy)
+            try:
+                result = await runner.run(ctx, flow)
+                outputs = result["outputs"]
+            finally:
+                trace = runner.trace_steps
         elif task.flow_type == "python":
-            outputs = await run_python_flow(ctx, config.paths.python_flow_dir, task.flow)
+            runner = PythonRunner(
+                flow_dir=config.paths.python_flow_dir,
+                screenshot_policy=config.trace.screenshot_policy,
+            )
+            try:
+                outputs = await runner.run(ctx, task.flow)
+            finally:
+                trace = runner.trace_steps
         elif task.flow_type == "agent":
             raise NotImplementedError("Agent flow is reserved but not enabled in this version.")
         else:
@@ -100,20 +110,37 @@ async def run_one_task(
         artifacts.write_json("run.json", run_json)
         return run_json
     except Exception as exc:
-        if connected is not None:
+        if connected is not None and not is_screenshot_error(exc):
             try:
-                await artifacts.screenshot(connected.page, "error", full_page=True)
+                error_screenshot = await artifacts.screenshot(connected.page, "error", full_page=True)
             except Exception:
-                pass
+                error_screenshot = None
+        else:
+            error_screenshot = None
         error_path = artifacts.write_error(exc)
         finished_at = utc_now_iso()
+        trace_path = artifacts.write_json(
+            "trace.json",
+            {
+                "task_id": task.id,
+                "browser_id": task.browser_id,
+                "status": "failed",
+                "error": str(exc),
+                "error_screenshot": error_screenshot,
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "steps": trace,
+            },
+        )
         run_json = {
             "status": "failed",
             "task": asdict(task),
             "opened": _opened_summary(opened),
             "error": str(exc),
             "error_path": error_path,
+            "error_screenshot": error_screenshot,
             "artifact_dir": str(artifacts.task_dir),
+            "trace_path": trace_path,
             "started_at": started_at,
             "finished_at": finished_at,
         }

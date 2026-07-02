@@ -208,6 +208,21 @@ ctx.bitbrowser
 
 这样可以保持边界清晰：调度器负责浏览器生命周期，Python flow 只负责页面自动化。
 
+当前实现包含两个示例：
+
+- `flows/py/paginate_titles.py`: 从 `inputs.url` 或 `inputs.urls` 打开页面，提取标题并保存截图。
+- `flows/py/conditional_login.py`: 按输入 selector 判断登录框是否出现，出现时填写账号密码并提交。
+
+运行示例：
+
+```bash
+python -m bitbrowser_auto run-one \
+  --browser-id <browser-id> \
+  --flow-type python \
+  --flow paginate_titles \
+  --url https://example.com
+```
+
 ### Python Flow 文件组织
 
 ```text
@@ -403,6 +418,18 @@ off
 on_error
 every_step
 ```
+
+当前 trace 会记录：
+
+- action / flow 名称。
+- selector、target、method、args/kwargs/chain 摘要。
+- 当前 URL。
+- 耗时。
+- 成功/失败状态。
+- 错误消息。
+- 截图引用或截图失败原因。
+
+敏感字段如 password、token、cookie、secret 会在摘要里脱敏。
 
 ## 第一版要做和不要做
 

@@ -54,4 +54,7 @@ class ArtifactManager:
         return str(path)
 
     def write_error(self, exc: BaseException) -> str:
-        return self.write_text("error.txt", "".join(traceback.format_exception(exc)))
+        return self.write_text(
+            "error.txt",
+            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+        )

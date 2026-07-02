@@ -149,6 +149,16 @@
   - `action: playwright`
   - target allowlist: `page`、`context`、`locator`、`keyboard`、`mouse`
   - method allowlist 已覆盖常见导航、locator、键盘、鼠标动作
+- Trace 可观测性：
+  - 每次任务写入 `trace.json`
+  - step 记录 action、selector/method、参数摘要、URL、耗时、成功/失败
+  - 支持 `trace.screenshot_policy`: `off` / `on_error` / `every_step`
+  - 失败时仍写入 `trace.json`、`error.txt` 和可用截图引用
+- Python Flow Runner：
+  - 加载本地 `flows/py/*.py`
+  - 校验 `async def run(ctx)` 契约
+  - Python flow 共用 `ctx.page`、`ctx.inputs`、`ctx.artifacts`
+  - 示例：`paginate_titles`、`conditional_login`
 
 本机已验证命令：
 
@@ -170,8 +180,15 @@
   --task-id passthrough-demo-001 \
   --flow open_and_get_title \
   --url https://example.com
+.venv/bin/python -m bitbrowser_auto run-one \
+  --browser-id 2357d261d2d2472985d52e7916d6a580 \
+  --task-id python-demo-002 \
+  --flow-type python \
+  --flow paginate_titles \
+  --url https://example.com
 .venv/bin/python -m bitbrowser_auto import-tasks configs/tasks.example.yaml --replace
 .venv/bin/python -m bitbrowser_auto list-tasks
+.venv/bin/python -m bitbrowser_auto run --config /tmp/phase8-app.yaml --tasks /tmp/phase8-tasks.yaml --once --replace
 .venv/bin/python -m unittest discover -s tests
 ```
 
@@ -183,13 +200,15 @@
 - Playwright `connect_over_cdp(ws)` 成功访问 `https://example.com/`。
 - 已生成截图、`run.json`、`trace.json`。
 - `open_and_get_title` passthrough flow 成功通过 `page.title()` 提取 `Example Domain`。
+- `paginate_titles` Python flow 成功通过 `ctx.page`、`ctx.inputs`、`ctx.artifacts` 访问页面、提取 title、保存截图。
+- Scheduler 路径也能执行 `flow_type: python` 任务。
+- 当前单元测试：15 个测试通过。
 
 下一步建议：
 
 1. 完善 Scheduler 失败重试的 trace/run 记录和 browser_runtime 的 ws/pid 回写。
-2. 加入 Python flow 的示例任务和回归验证。
-3. 扩展单元测试覆盖 Scheduler 并发和失败重试逻辑。
-4. 后续再接 GUI；flow 编写和重构交给 Codex 等外部成熟工具。
+2. 扩展单元测试覆盖 Scheduler 并发和失败重试逻辑。
+3. 后续再接 GUI；flow 编写和重构交给 Codex 等外部成熟工具。
 
 ## Phase 5: Declarative Flow Runner
 
@@ -263,6 +282,7 @@
 - 每次任务运行都有 trace。
 - trace 能对应到 `run.json` 和截图。
 - trace 只记录执行证据，不承担项目内自动固化。
+- 失败任务也能生成 `trace.json` 和 `error.txt`。
 
 ## Phase 8: Python Flow Runner
 
@@ -282,6 +302,7 @@
 - 能加载本地 Python flow。
 - Python flow 不需要也不能自己打开比特窗口。
 - Python flow 能使用 `ctx.page`、`ctx.inputs`、`ctx.artifacts`。
+- Python flow 也能写入基础 trace。
 
 ## Phase 9: NiceGUI 双模式 UI
 
