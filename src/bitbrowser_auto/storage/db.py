@@ -23,6 +23,12 @@ class Storage:
     def close(self) -> None:
         self.conn.close()
 
+    def __enter__(self) -> Storage:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
     def init_schema(self) -> None:
         self.conn.executescript(
             """
@@ -143,6 +149,38 @@ class Storage:
         sql += " order by created_at asc limit ?"
         params.append(limit)
         rows = self.conn.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def task_status_counts(self) -> dict[str, int]:
+        rows = self.conn.execute("select status, count(*) as count from tasks group by status").fetchall()
+        return {str(row["status"]): int(row["count"]) for row in rows}
+
+    def recent_errors(self, *, limit: int = 5) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            select id, browser_id, flow_type, flow, last_error, updated_at
+            from tasks
+            where last_error is not null
+            order by updated_at desc
+            limit ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_task_runs(self, *, task_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        sql = "select * from task_runs"
+        params: list[Any] = []
+        if task_id:
+            sql += " where task_id = ?"
+            params.append(task_id)
+        sql += " order by started_at desc limit ?"
+        params.append(limit)
+        rows = self.conn.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_browser_runtime(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute("select * from browser_runtime order by updated_at desc").fetchall()
         return [dict(row) for row in rows]
 
     def count_tasks(self, *, status: str | None = None) -> int:
@@ -352,4 +390,3 @@ def _task_from_row(row: sqlite3.Row) -> Task:
         goal=str(row["goal"]) if row["goal"] else None,
         inputs=json.loads(row["inputs_json"] or "{}"),
     )
-

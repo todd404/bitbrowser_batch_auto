@@ -46,12 +46,23 @@ class TraceConfig:
 
 
 @dataclass
+class UiConfig:
+    default_mode: str = "desktop"
+    host: str = "127.0.0.1"
+    port: int = 0
+    title: str = "BitBrowser Auto"
+    window_width: int = 1200
+    window_height: int = 800
+
+
+@dataclass
 class AppConfig:
     bitbrowser: BitBrowserConfig = field(default_factory=BitBrowserConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     playwright: PlaywrightConfig = field(default_factory=PlaywrightConfig)
     trace: TraceConfig = field(default_factory=TraceConfig)
+    ui: UiConfig = field(default_factory=UiConfig)
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -86,6 +97,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
     paths = raw.get("paths") or {}
     playwright = raw.get("playwright") or {}
     trace = raw.get("trace") or {}
+    ui = raw.get("ui") or {}
 
     return AppConfig(
         bitbrowser=BitBrowserConfig(
@@ -126,5 +138,13 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         trace=TraceConfig(
             enabled=bool(trace.get("enabled", TraceConfig.enabled)),
             screenshot_policy=str(trace.get("screenshot_policy", TraceConfig.screenshot_policy)),
+        ),
+        ui=UiConfig(
+            default_mode=str(ui.get("default_mode", UiConfig.default_mode)),
+            host=str(ui.get("host", UiConfig.host)),
+            port=int(ui.get("port", UiConfig.port)),
+            title=str(ui.get("title", UiConfig.title)),
+            window_width=int(ui.get("window_width", UiConfig.window_width)),
+            window_height=int(ui.get("window_height", UiConfig.window_height)),
         ),
     )

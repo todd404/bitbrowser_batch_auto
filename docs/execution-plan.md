@@ -159,11 +159,22 @@
   - 校验 `async def run(ctx)` 契约
   - Python flow 共用 `ctx.page`、`ctx.inputs`、`ctx.artifacts`
   - 示例：`paginate_titles`、`conditional_login`
+- NiceGUI UI：
+  - CLI 入口：`bitbrowser_auto ui`
+  - Web 模式：`bitbrowser_auto ui --web`
+  - 页面：Dashboard、Browser Windows、Tasks、Runs、Flows、Settings
+  - Dashboard 可查看任务状态统计、Local Server 健康检查、最近错误
+  - Browser Windows 可查看窗口列表并打开/关闭指定 `browser_id`
+  - Tasks 可导入任务、筛选状态、启动/停止本轮调度、重置 running
+  - Runs 可查看运行历史、`run.json`、`trace.json` 和截图 artifact
+  - Flows 可列出 declarative/Python flow，并校验 declarative flow
+  - Settings 可查看当前配置摘要
 
 本机已验证命令：
 
 ```bash
 .venv/bin/python -m bitbrowser_auto --help
+.venv/bin/python -m bitbrowser_auto ui --help
 .venv/bin/python -m bitbrowser_auto validate-flow open_and_check
 .venv/bin/python -m bitbrowser_auto validate-flow open_and_get_title
 .venv/bin/python -m bitbrowser_auto check
@@ -189,6 +200,7 @@
 .venv/bin/python -m bitbrowser_auto import-tasks configs/tasks.example.yaml --replace
 .venv/bin/python -m bitbrowser_auto list-tasks
 .venv/bin/python -m bitbrowser_auto run --config /tmp/phase8-app.yaml --tasks /tmp/phase8-tasks.yaml --once --replace
+.venv/bin/python -m bitbrowser_auto ui --web --host 127.0.0.1 --port 8765
 .venv/bin/python -m unittest discover -s tests
 ```
 
@@ -202,13 +214,16 @@
 - `open_and_get_title` passthrough flow 成功通过 `page.title()` 提取 `Example Domain`。
 - `paginate_titles` Python flow 成功通过 `ctx.page`、`ctx.inputs`、`ctx.artifacts` 访问页面、提取 title、保存截图。
 - Scheduler 路径也能执行 `flow_type: python` 任务。
+- Web UI 已用本机 Microsoft Edge 验证 websocket、页面导航、任务页、窗口页、运行页、flow 页和 Dashboard 健康检查。
+- 比特浏览器窗口可打开 UI 页面并截图；若具体比特窗口配置拦截 localhost websocket，UI 交互验收应使用普通浏览器。
 - 当前单元测试：15 个测试通过。
 
 下一步建议：
 
-1. 完善 Scheduler 失败重试的 trace/run 记录和 browser_runtime 的 ws/pid 回写。
-2. 扩展单元测试覆盖 Scheduler 并发和失败重试逻辑。
-3. 后续再接 GUI；flow 编写和重构交给 Codex 等外部成熟工具。
+1. 让用户先按 Web UI 验收第一版操作台，按实际使用习惯微调字段、按钮和列表密度。
+2. 完善 Scheduler 失败重试的 trace/run 记录和 browser_runtime 的 ws/pid 回写。
+3. 扩展单元测试覆盖 Scheduler 并发和失败重试逻辑。
+4. 后续做 PyInstaller `onedir` 打包和 Desktop/native 模式实机验证；flow 编写和重构仍交给 Codex 等外部成熟工具。
 
 ## Phase 5: Declarative Flow Runner
 

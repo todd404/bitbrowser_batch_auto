@@ -126,6 +126,30 @@ BitBrowserAuto validate-flow open_and_check
   - artifact 路径
   - 比特浏览器 Local Server 地址
 
+## 当前实现状态
+
+已落地 Phase 9 的首版操作台：
+
+- `bitbrowser_auto ui`
+  - 按 `ui.default_mode` 启动，默认 Desktop/native。
+  - 已显式加入 `pywebview` 依赖，后续打包时继续验证各平台 WebView。
+- `bitbrowser_auto ui --web`
+  - Web 模式已可在普通浏览器访问。
+  - 本机验证地址：`http://127.0.0.1:8765`。
+- 已实现页面：
+  - Dashboard：任务状态统计、Local Server 健康检查、最近错误。
+  - Browser Windows：窗口列表、指定 `browser_id` 打开/关闭。
+  - Tasks：导入任务、状态筛选、启动/停止调度、重置 running。
+  - Runs：运行历史、`run.json`、`trace.json`、截图预览。
+  - Flows：Declarative/Python flow 列表，Declarative validator。
+  - Settings：当前配置 JSON 摘要。
+- 已验证：
+  - `.venv/bin/python -m bitbrowser_auto ui --help`
+  - `.venv/bin/python -m bitbrowser_auto ui --web --host 127.0.0.1 --port 8765`
+  - 普通浏览器中 websocket、页面导航、健康检查和主要列表渲染正常。
+
+注意：比特浏览器窗口可以打开 UI 页面，但某些窗口配置可能拦截 localhost websocket；UI 验收优先使用普通浏览器。比特浏览器仍用于自动化任务窗口，不要求承载管理 UI。
+
 ## UI 与 Core 的边界
 
 UI 只能调用 core 层，不直接操作 Playwright 或 SQLite 细节。

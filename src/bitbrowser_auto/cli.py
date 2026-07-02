@@ -72,6 +72,12 @@ def build_parser() -> argparse.ArgumentParser:
     validate_flow.add_argument("flow", help="Flow name or YAML/JSON path.")
     validate_flow.add_argument("--config", default=None, help="Path to app config YAML.")
 
+    ui_parser = subparsers.add_parser("ui", help="Start the NiceGUI interface.")
+    ui_parser.add_argument("--config", default=None, help="Path to app config YAML.")
+    ui_parser.add_argument("--web", action="store_true", help="Run in browser web mode instead of desktop mode.")
+    ui_parser.add_argument("--host", default=None, help="Override UI host.")
+    ui_parser.add_argument("--port", type=int, default=None, help="Override UI port.")
+
     return parser
 
 
@@ -99,6 +105,9 @@ def main(argv: list[str] | None = None) -> None:
             result = asyncio.run(_cmd_run(args))
         elif args.command == "validate-flow":
             result = _cmd_validate_flow(args)
+        elif args.command == "ui":
+            _cmd_ui(args)
+            return
         else:
             parser.error(f"unknown command: {args.command}")
             return
@@ -237,6 +246,16 @@ def _cmd_validate_flow(args: argparse.Namespace) -> dict[str, Any]:
         "errors": result.errors,
         "warnings": result.warnings,
     }
+
+
+def _cmd_ui(args: argparse.Namespace) -> None:
+    from .ui.app import run_ui
+
+    config = load_config(args.config)
+    mode = "web" if args.web else config.ui.default_mode
+    host = args.host or config.ui.host
+    port = config.ui.port if args.port is None else args.port
+    run_ui(config=config, mode=mode, host=host, port=port)
 
 
 async def _cmd_run(args: argparse.Namespace) -> dict[str, Any]:
