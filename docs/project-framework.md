@@ -16,7 +16,7 @@
 
 - 比特浏览器浏览器窗口接口: [bitbrowser-browser-api.md](bitbrowser-browser-api.md)
 - 轻量任务调度系统设计: [lightweight-task-scheduler.md](lightweight-task-scheduler.md)
-- 自动化流程固化与扩展设计: [automation-flow-design.md](automation-flow-design.md)
+- 自动化流程执行与扩展设计: [automation-flow-design.md](automation-flow-design.md)
 - GUI 设计与打包策略: [gui-design.md](gui-design.md)
 - 执行计划: [execution-plan.md](execution-plan.md)
 - 原始来源: https://doc2.bitbrowser.cn/jiekou/liu-lan-qi-jie-kou.html
@@ -172,7 +172,7 @@ Runner 的职责：
 
 ### 5. Declarative Flows
 
-Declarative flow 是 JSON/YAML 动作流，适合用户用自己的 Agent 跑通一次后固化，后续批量重复执行。
+Declarative flow 是 JSON/YAML 动作流，适合后续批量重复执行。flow 的生成和重构可以交给 Codex 等外部成熟工具，本项目只负责校验、调度和执行。
 
 建议每个流程包含：
 
@@ -190,7 +190,7 @@ Declarative flow 示例：
 
 ### 6. Python Flows
 
-Python flow 适合复杂判断、循环、分页、数据清洗或调用外部 API。用户自己的 Agent 也可以在流程跑通后生成 `.py` 文件，系统通过稳定接口调用：
+Python flow 适合复杂判断、循环、分页、数据清洗或调用外部 API。用户或外部 Agent 可以生成 `.py` 文件，系统通过稳定接口调用：
 
 ```python
 async def run(ctx):
@@ -202,18 +202,18 @@ async def run(ctx):
 
 Python flow 不负责打开比特浏览器窗口，只接收系统提供的 `ctx`。
 
-### 7. AI Agent Flows
+### 7. AI Agent Execution Flows
 
-AI Agent 适合页面结构变化较大、需要根据观察动态决策的流程。
+AI Agent 适合页面结构变化较大、需要根据观察动态决策的执行任务。
 
 建议采用 Planner-Executor 结构：
 
-- Planner: 根据任务目标、页面观察、历史步骤生成下一步动作。
+- Planner: 根据任务目标、页面观察、历史步骤生成下一步执行动作。
 - Executor: 只执行有限动作集合，如 `click`、`type`、`select`、`goto`、`wait`、`extract`、`screenshot`。
 - Guardrails: 限制域名、最大步骤数、最大耗时、禁止危险操作。
 - Memory: 保存当前任务的页面摘要、已尝试动作、失败原因和关键提取结果。
 
-AI Agent 不应直接获得无限制浏览器控制权。所有动作都通过工具层执行，并记录输入、输出和截图证据。
+AI Agent 不应直接获得无限制浏览器控制权。所有动作都通过工具层执行，并记录输入、输出和截图证据。Agent 在本项目里的边界是执行任务，不负责生成或固化 declarative/Python flow。
 
 ## 建议目录结构
 
@@ -370,7 +370,7 @@ task_runs
 5. 增加 artifacts：截图、日志、任务结果 JSON。
 6. 增加第一个 Declarative flow。
 7. 增加 Python flow 加载能力。
-8. 在前两类 flow 稳定后，再接入 AI Agent 动作层。
+8. 在前两类 flow 稳定后，再按需接入 AI Agent 执行层。
 
 ## 风险点
 

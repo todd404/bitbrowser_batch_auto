@@ -346,8 +346,8 @@ async def run_automation(ctx):
 
 第一版建议实现两种 runner：
 
-- `declarative`: 执行 JSON/YAML 动作流，适合用户用 Agent 跑通后固化；包含核心语义动作和 Playwright passthrough。
-- `python`: 加载用户或 Agent 生成的 `.py` 文件，适合判断、循环、复杂提取。
+- `declarative`: 执行 JSON/YAML 动作流，适合批量复用；包含核心语义动作和 Playwright passthrough。
+- `python`: 加载用户或外部工具生成的 `.py` 文件，适合判断、循环、复杂提取。
 
 `agent` 类型在第一版只保留 schema 和分发入口，未启用时返回清晰错误即可。不要一开始就做插件系统或复杂 Agent 框架。
 
@@ -421,7 +421,6 @@ python -m bitbrowser_auto ui --web
 - `run`: 按并发配置运行任务。
 - `ui`: 默认 Desktop Mode，使用 NiceGUI native window。
 - `ui --web`: Web Mode，用浏览器访问本机 UI。
-- `trace-to-flow`: 把成功运行的 trace 转成可编辑的 JSON/YAML 动作流。
 
 也可以保留一个更低门槛的一步命令：
 
@@ -441,10 +440,9 @@ python -m bitbrowser_auto run --tasks configs/tasks.yaml
 6. `PythonRunner`: 支持加载 `async def run(ctx)` 的本地 Python flow。
 7. `FlowValidator`: 校验 Declarative flow schema、模板变量、必填字段和 passthrough allowlist。
 8. `Artifacts`: 失败截图、run.json、trace.json、error.txt。
-9. `CLI`: `check`、`run --tasks`、`trace-to-flow`。
+9. `CLI`: `check`、`run --tasks`、`validate-flow`。
 10. `NiceGUI UI`: 支持 Desktop Mode 和 Web Mode，调用同一套 core service。
-11. 准备 `bitbrowser-flow-author` skill，让外部 Agent 能生成固化 flow。
-12. 再增加更多 flow 和 AI Agent。
+11. 再增加更多 flow 和可选 Agent 执行入口。
 
 ## 后续再升级的条件
 

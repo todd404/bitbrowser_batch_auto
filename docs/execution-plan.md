@@ -8,10 +8,10 @@
 
 1. 先跑通真实链路：比特浏览器窗口 -> ws -> Playwright -> flow。
 2. 再做轻量调度：SQLite、窗口槽位、并发控制、失败恢复。
-3. 再做可固化 flow：Declarative YAML/JSON、trace、validator。
+3. 再做可执行 flow：Declarative YAML/JSON、validator、trace 可观测性。
 4. 再做 Python flow：承接复杂判断和循环。
 5. 增加 NiceGUI 双模式 UI，让普通用户能双击打开。
-6. 最后准备 Agent/Skill 扩展，不阻塞第一版闭环。
+6. Agent 只作为执行 runner 预留，不做 flow authoring 或固化工具。
 
 ## Phase 0: 项目初始化
 
@@ -33,7 +33,7 @@
 
 ## Phase 1: BitBrowser Client + CDP 接管
 
-目标：把已验证的手工实验固化为代码。
+目标：把已验证的手工实验沉淀为可复用代码。
 
 交付物：
 
@@ -188,8 +188,8 @@
 
 1. 完善 Scheduler 失败重试的 trace/run 记录和 browser_runtime 的 ws/pid 回写。
 2. 加入 Python flow 的示例任务和回归验证。
-3. 增加 `trace-to-flow` 初稿生成。
-4. 扩展单元测试覆盖 Scheduler 并发和失败重试逻辑。
+3. 扩展单元测试覆盖 Scheduler 并发和失败重试逻辑。
+4. 后续再接 GUI；flow 编写和重构交给 Codex 等外部成熟工具。
 
 ## Phase 5: Declarative Flow Runner
 
@@ -222,7 +222,7 @@
 
 ## Phase 6: Playwright Passthrough
 
-目标：让成熟 Agent 可以表达更多 Playwright 能力，不被核心动作限制。
+目标：让 YAML 能表达更多 Playwright 能力，不被核心动作限制。
 
 交付物：
 
@@ -242,9 +242,9 @@
 - 禁止未允许的危险方法。
 - passthrough 动作也能写入 trace。
 
-## Phase 7: Trace 与固化
+## Phase 7: Trace 与可观测性
 
-目标：支持“Agent 跑通 -> 固化 flow”的闭环。
+目标：记录任务执行过程，方便排障、审计和外部工具分析。
 
 交付物：
 
@@ -257,13 +257,12 @@
   - 耗时
   - 成功/失败
   - screenshot 引用
-- CLI: `trace-to-flow`
 
 验收标准：
 
 - 每次任务运行都有 trace。
-- `trace-to-flow` 能生成可编辑 YAML 初稿。
-- 可把具体值替换成 `inputs.xxx`。
+- trace 能对应到 `run.json` 和截图。
+- trace 只记录执行证据，不承担项目内自动固化。
 
 ## Phase 8: Python Flow Runner
 
@@ -319,34 +318,14 @@
 - UI 能查看任务状态、运行日志、截图和错误。
 - CLI 命令仍然可用。
 
-## Phase 10: Flow Authoring Skill
+## Phase 10: Agent Flow 执行接口
 
-目标：给 Codex 等外部 Agent 一套生成固化 flow 的指导。
-
-交付物：
-
-- `bitbrowser-flow-author` skill 草案。
-- `SKILL.md`
-- references：
-  - `declarative-flow-schema.md`
-  - `playwright-passthrough.md`
-  - `python-flow-contract.md`
-- `validate_flow.py`
-
-验收标准：
-
-- Agent 能根据自然语言目标或 trace 生成 declarative flow。
-- Agent 知道何时升级成 Python flow。
-- 生成后能通过 `validate_flow.py` 基础校验。
-
-## Phase 11: Agent Flow 预留接口
-
-目标：不实现具体 Agent 技术，但接口可接入。
+目标：不实现 flow authoring；只预留 Agent 作为执行 runner 的接口。
 
 交付物：
 
 - `flow_type: agent` schema。
-- `AgentRunner` stub。
+- `AgentRunner` stub 或外部 runner adapter。
 - 清晰错误提示：当前版本未启用 Agent runner。
 - 工具接口草案：
   - `observe`
@@ -362,6 +341,7 @@
 
 - 配置中出现 `flow_type: agent` 时不会破坏调度器。
 - 用户能看到明确提示，而不是异常堆栈。
+- Agent runner 如后续启用，只负责执行任务和返回结果，不生成或固化 flow。
 
 ## 推荐实现顺序
 
@@ -377,7 +357,6 @@ Phase 0
   -> Phase 8
   -> Phase 9
   -> Phase 10
-  -> Phase 11
 ```
 
 如果想更快看到价值，可以先跳过 Phase 6、7、10：

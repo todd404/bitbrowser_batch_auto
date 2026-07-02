@@ -82,7 +82,7 @@ BitBrowserAuto ui --web --port 8765
 ```bash
 BitBrowserAuto check
 BitBrowserAuto run --tasks configs/tasks.yaml
-BitBrowserAuto trace-to-flow artifacts/demo-001/trace.json
+BitBrowserAuto validate-flow open_and_check
 ```
 
 适合：
