@@ -50,7 +50,7 @@ class UiConfig:
     default_mode: str = "desktop"
     host: str = "127.0.0.1"
     port: int = 0
-    title: str = "BitBrowser Auto"
+    title: str = "比特浏览器自动化"
     window_width: int = 1200
     window_height: int = 800
 

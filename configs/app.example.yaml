@@ -29,7 +29,6 @@ ui:
   default_mode: "desktop"
   host: "127.0.0.1"
   port: 0
-  title: "BitBrowser Auto"
+  title: "比特浏览器自动化"
   window_width: 1200
   window_height: 800
-
