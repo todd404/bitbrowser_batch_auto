@@ -1,0 +1,17 @@
+display_name: "批量打开网址并读取标题"
+description: "按顺序打开一组网址，读取每个页面标题，并保存每页截图。"
+category: "数据采集"
+inputs:
+  url:
+    type: string
+    label: "单个网址"
+    required: false
+    default: "https://example.com"
+    placeholder: "https://example.com"
+    help: "如果不填写网址列表，就会使用这个单个网址。"
+  urls:
+    type: multiline
+    label: "网址列表"
+    required: false
+    placeholder: "https://example.com"
+    help: "高级用法：当前 Python flow 期望列表结构，普通用户优先使用单个网址。"

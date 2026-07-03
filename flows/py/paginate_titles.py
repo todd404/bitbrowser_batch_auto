@@ -1,5 +1,8 @@
 async def run(ctx):
-    urls = ctx.inputs.get("urls") or [ctx.inputs.get("url", "https://example.com")]
+    urls = ctx.inputs.get("urls")
+    if isinstance(urls, str):
+        urls = [line.strip() for line in urls.splitlines() if line.strip()]
+    urls = urls or [ctx.inputs.get("url", "https://example.com")]
     results = []
 
     for index, url in enumerate(urls, start=1):
@@ -9,4 +12,3 @@ async def run(ctx):
         results.append({"url": ctx.page.url, "title": title, "screenshot": screenshot})
 
     return {"pages": results}
-

@@ -1,9 +1,16 @@
 name: "open_and_check"
+display_name: "打开网址并截图"
+description: "在选中的账号窗口里打开目标网址，并保存最终页面截图。"
+category: "网页访问"
 version: 1
 inputs:
   url:
     type: string
+    label: "目标网址"
     required: true
+    default: "https://example.com"
+    placeholder: "https://example.com"
+    help: "每个已选账号窗口都会打开这个网址。"
 steps:
   - action: goto
     url: "{{ inputs.url }}"
@@ -13,4 +20,3 @@ steps:
   - action: screenshot
     name: "final"
     full_page: true
-

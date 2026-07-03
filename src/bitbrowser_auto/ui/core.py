@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -147,6 +148,56 @@ class UiCoreService:
                 return card
         return None
 
+    def create_declarative_template(
+        self,
+        *,
+        name: str,
+        display_name: str,
+        description: str,
+        category: str,
+        default_url: str,
+    ) -> dict[str, Any]:
+        slug = _template_slug(name or display_name)
+        flow_dir = self.config.paths.declarative_flow_dir
+        flow_dir.mkdir(parents=True, exist_ok=True)
+        path = flow_dir / f"{slug}.yaml"
+        if path.exists():
+            raise FileExistsError(f"任务模板已存在：{slug}")
+
+        payload = {
+            "name": slug,
+            "display_name": display_name.strip() or slug,
+            "description": description.strip() or "在选中的账号窗口里打开目标网址，并保存最终页面截图。",
+            "category": category.strip() or "网页访问",
+            "version": 1,
+            "inputs": {
+                "url": {
+                    "type": "string",
+                    "label": "目标网址",
+                    "required": True,
+                    "default": default_url.strip() or "https://example.com",
+                    "placeholder": "https://example.com",
+                    "help": "每个已选账号窗口都会打开这个网址。",
+                }
+            },
+            "steps": [
+                {"action": "goto", "url": "{{ inputs.url }}"},
+                {"action": "wait_for_url", "url": "**", "timeout_ms": 60000},
+                {"action": "screenshot", "name": "final", "full_page": True},
+            ],
+        }
+        validation = FlowValidator().validate(payload)
+        if not validation.ok:
+            raise ValueError("；".join(validation.errors))
+
+        try:
+            import yaml
+        except ImportError as exc:
+            raise RuntimeError("PyYAML is required to create YAML templates. Run `pip install -e .`.") from exc
+        path.write_text(yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        card = self.get_flow_card("declarative", slug)
+        return card or {"name": slug, "path": str(path), "flow_type": "declarative"}
+
     def validate_flow(self, name_or_path: str) -> dict[str, Any]:
         flow = load_declarative_flow(self.config.paths.declarative_flow_dir, name_or_path)
         result = FlowValidator().validate(flow)
@@ -178,9 +229,9 @@ class UiCoreService:
         warnings = []
         card = self.get_flow_card(flow_type, flow)
         if not card:
-            errors.append("请选择流程")
+            errors.append("请选择任务模板")
         if not browser_ids:
-            errors.append("请选择至少一个窗口")
+            errors.append("请选择至少一个账号窗口")
         if card:
             for field in card["inputs"]:
                 if field.get("required") and _blank(inputs.get(field["name"])):
@@ -193,7 +244,7 @@ class UiCoreService:
         busy = self._busy_browser_ids()
         busy_selected = [browser_id for browser_id in browser_ids if browser_id in busy]
         if busy_selected:
-            warnings.append(f"{len(busy_selected)} 个窗口正在运行任务，提交后会等待空闲或由调度器跳过冲突。")
+            warnings.append(f"{len(busy_selected)} 个账号窗口正在运行任务，提交后会等待空闲或由执行队列跳过冲突。")
         return {
             "ok": not errors,
             "errors": errors,
@@ -501,6 +552,7 @@ def _declarative_flow_meta(path: Path) -> dict[str, Any]:
     return {
         "display_name": str(flow.get("display_name") or flow.get("name") or path.stem),
         "description": str(flow.get("description") or "声明式自动化流程"),
+        "category": str(flow.get("category") or ""),
         "inputs": _normalize_inputs(flow.get("inputs") or {}),
         "valid": result.ok,
         "errors": result.errors,
@@ -520,6 +572,7 @@ def _python_flow_meta(path: Path) -> dict[str, Any]:
     return {
         "display_name": str(meta.get("display_name") or meta.get("name") or path.stem),
         "description": str(meta.get("description") or "Python 自动化流程"),
+        "category": str(meta.get("category") or ""),
         "inputs": _normalize_inputs(meta.get("inputs") or {}),
         "valid": True,
         "errors": [],
@@ -555,6 +608,7 @@ def _normalize_inputs(inputs: dict[str, Any]) -> list[dict[str, Any]]:
                 "required": bool(spec.get("required")),
                 "default": spec.get("default"),
                 "placeholder": str(spec.get("placeholder") or ""),
+                "help": str(spec.get("help") or ""),
                 "choices": spec.get("choices") if isinstance(spec.get("choices"), list) else [],
                 "per_window": bool(spec.get("per_window")),
             }
@@ -576,6 +630,15 @@ def _pick_screenshot(run_json: dict[str, Any]) -> str | None:
 
 def _default_batch_name(flow: str) -> str:
     return f"{flow} {_now().strftime('%Y-%m-%d %H:%M')}"
+
+
+def _template_slug(value: str) -> str:
+    text = re.sub(r"[^a-zA-Z0-9_-]+", "_", value.strip()).strip("_").lower()
+    if not text:
+        text = f"template_{_now().strftime('%Y%m%d_%H%M%S')}"
+    if not re.match(r"^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", text):
+        raise ValueError("模板文件名只能包含字母、数字、下划线和短横线")
+    return text
 
 
 def _blank(value: Any) -> bool:

@@ -1,0 +1,11 @@
+display_name: "打开网址并确认可访问"
+description: "在选中的账号窗口里打开一个网址，保存截图，并返回访问结果。"
+category: "网页访问"
+inputs:
+  url:
+    type: string
+    label: "目标网址"
+    required: false
+    default: "https://example.com"
+    placeholder: "https://example.com"
+    help: "未填写时默认访问 example.com。"
