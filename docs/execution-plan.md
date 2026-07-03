@@ -220,10 +220,13 @@
 
 下一步建议：
 
-1. 让用户先按 Web UI 验收第一版操作台，按实际使用习惯微调字段、按钮和列表密度。
-2. 完善 Scheduler 失败重试的 trace/run 记录和 browser_runtime 的 ws/pid 回写。
-3. 扩展单元测试覆盖 Scheduler 并发和失败重试逻辑。
-4. 后续做 PyInstaller `onedir` 打包和 Desktop/native 模式实机验证；flow 编写和重构仍交给 Codex 等外部成熟工具。
+1. Phase 9 的技术版 UI 已完成，但需要进入普通用户可用性改造，详见 [GUI 设计与打包策略](gui-design.md)。
+2. 优先实现“新建批量运行”向导：选择 1 个 flow，选择多个窗口，填写参数，生成多条底层 task 并运行。
+3. 再实现批次化结果页和失败项重跑，让用户按一次批量运行复盘，而不是只看底层 task/run 表。
+4. 增加定时计划：一次性、每天、每周、间隔运行，并处理错过时间和上次未结束的策略。
+5. 完善 Scheduler 失败重试的 trace/run 记录和 browser_runtime 的 ws/pid 回写。
+6. 扩展单元测试覆盖 Scheduler 并发、失败重试、批量生成任务和计划触发逻辑。
+7. 后续做 PyInstaller `onedir` 打包和 Desktop/native 模式实机验证；flow 编写和重构仍交给 Codex 等外部成熟工具。
 
 ## Phase 5: Declarative Flow Runner
 
@@ -323,17 +326,43 @@
 
 目标：提供普通用户可用的 GUI，同时保留 Web 和 CLI 模式。
 
+当前状态：双模式技术底座已完成，但页面仍偏“命令行工具的 GUI 版本”。Phase 9 后续重点改为可用性：让普通用户围绕“批量运行”和“定时计划”完成工作，而不是围绕底层任务文件和 `browser_id` 操作。
+
 交付物：
 
 - `bitbrowser_auto ui`
 - `bitbrowser_auto ui --web`
-- NiceGUI 页面：
+- NiceGUI 技术页面：
   - Dashboard
   - Browser Windows
   - Tasks
   - Runs
   - Flows
   - Settings
+- 普通用户页面：
+  - 运行台
+  - 新建运行
+  - 计划任务
+  - 运行结果
+  - 窗口
+  - 流程库
+  - 设置/诊断
+- 批量运行能力：
+  - 选择一个 flow。
+  - 选择多个比特浏览器窗口。
+  - 填写所有窗口共用参数。
+  - 填写每个窗口不同参数。
+  - 生成多条底层 task 并启动调度。
+- 定时计划能力：
+  - 一次性运行。
+  - 每天运行。
+  - 每周运行。
+  - 每隔 N 分钟或 N 小时运行。
+  - 支持错过时间和上次未结束的处理策略。
+- 批次化结果：
+  - 按批次查看运行进度和历史结果。
+  - 查看每个窗口的状态、截图、输出和错误。
+  - 一键重跑失败窗口。
 - UI 配置：
   - `default_mode`
   - `host`
@@ -350,9 +379,21 @@
 - Desktop Mode 能打开独立窗口。
 - Web Mode 能用浏览器访问同一套 UI。
 - UI 能查看比特窗口列表。
-- UI 能导入任务并启动/停止调度。
-- UI 能查看任务状态、运行日志、截图和错误。
+- UI 能不手填 `browser_id`，通过名称、分组、序号选择多个窗口。
+- UI 能让多个窗口执行同一个 flow。
+- UI 能为 flow 自动生成参数表单。
+- UI 能创建一次性和重复定时计划。
+- UI 能按批次查看任务状态、运行日志、截图和错误。
+- UI 能一键重跑失败窗口。
 - CLI 命令仍然可用。
+
+建议拆分：
+
+- Phase 9A：用户视角壳层，重组导航和首屏。
+- Phase 9B：批量运行向导。
+- Phase 9C：运行结果批次化。
+- Phase 9D：定时计划。
+- Phase 9E：打包和桌面体验。
 
 ## Phase 10: Agent Flow 执行接口
 

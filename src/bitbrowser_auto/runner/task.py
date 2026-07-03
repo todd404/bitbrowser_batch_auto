@@ -14,6 +14,7 @@ class Task:
     flow: str
     inputs: dict[str, Any] = field(default_factory=dict)
     goal: str | None = None
+    batch_id: str | None = None
 
 
 @dataclass

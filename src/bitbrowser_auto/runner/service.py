@@ -171,6 +171,7 @@ def task_from_mapping(data: dict[str, Any]) -> Task:
         flow=str(data["flow"]),
         inputs=inputs,
         goal=str(data["goal"]) if data.get("goal") else None,
+        batch_id=str(data["batch_id"]) if data.get("batch_id") else None,
     )
 
 

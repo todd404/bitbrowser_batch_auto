@@ -17,6 +17,7 @@ class Scheduler:
     config: AppConfig
     storage: Storage
     once: bool = False
+    batch_id: str | None = None
     poll_interval_seconds: float = 1
     pool: WindowSlotPool = field(init=False)
     _running: set[asyncio.Task[Any]] = field(default_factory=set)
@@ -45,7 +46,11 @@ class Scheduler:
             free_capacity = self.config.scheduler.max_concurrent_windows - len(self._running)
             if free_capacity > 0:
                 busy = await self.pool.busy_browser_ids()
-                tasks = self.storage.claim_pending_tasks(limit=free_capacity, busy_browser_ids=busy)
+                tasks = self.storage.claim_pending_tasks(
+                    limit=free_capacity,
+                    busy_browser_ids=busy,
+                    batch_id=self.batch_id,
+                )
                 for task in tasks:
                     acquired = await self.pool.acquire(task.browser_id)
                     if not acquired:
@@ -55,7 +60,7 @@ class Scheduler:
                     worker = asyncio.create_task(self._run_claimed_task(task))
                     self._running.add(worker)
 
-            pending_count = self.storage.count_tasks(status="pending")
+            pending_count = self.storage.count_tasks(status="pending", batch_id=self.batch_id)
             if self.once and pending_count == 0 and not self._running:
                 break
 
@@ -77,12 +82,15 @@ class Scheduler:
             "started": started,
             "completed": completed,
             "failed": failed,
-            "pending": self.storage.count_tasks(status="pending"),
+            "pending": self.storage.count_tasks(status="pending", batch_id=self.batch_id),
             "running": self.storage.count_tasks(status="running"),
+            "batch_id": self.batch_id,
         }
 
     async def _run_claimed_task(self, task: Task) -> dict[str, Any]:
         run_id: str | None = None
+        if task.batch_id:
+            self.storage.refresh_batch_status(task.batch_id)
         self.storage.update_browser_runtime(task.browser_id, status="opening", current_task_id=task.id)
         try:
             run_id = self.storage.create_task_run(task)
@@ -97,6 +105,8 @@ class Scheduler:
                 self.storage.mark_task_success(task.id)
             else:
                 self._mark_failure(task, str(result.get("error") or "task failed"))
+            if task.batch_id:
+                self.storage.refresh_batch_status(task.batch_id)
             return result
         except Exception as exc:
             result = {
@@ -108,6 +118,8 @@ class Scheduler:
             if run_id:
                 self.storage.finish_task_run(run_id, result)
             self._mark_failure(task, str(exc))
+            if task.batch_id:
+                self.storage.refresh_batch_status(task.batch_id)
             return result
         finally:
             self.storage.update_browser_runtime(task.browser_id, status="idle")
