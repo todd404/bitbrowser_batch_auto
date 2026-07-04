@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mouse Trace</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #5c6675;
+      --line: #d8dee8;
+      --panel: rgba(255, 255, 255, 0.92);
+      --accent: #147a73;
+      --accent-2: #c23b22;
+      --surface: #f4f6f8;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      min-height: 64px;
+      padding: 12px 18px;
+      display: grid;
+      grid-template-columns: minmax(140px, 1fr) auto;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      z-index: 2;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(76px, auto));
+      gap: 8px;
+      align-items: center;
+    }
+
+    .stat {
+      min-height: 40px;
+      padding: 4px 8px;
+      border-left: 1px solid var(--line);
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    .value {
+      margin-top: 4px;
+      min-width: 0;
+      font-variant-numeric: tabular-nums;
+      font-size: 14px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .stage {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    .controls {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      display: flex;
+      gap: 8px;
+      z-index: 2;
+    }
+
+    button {
+      appearance: none;
+      min-width: 42px;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(23, 32, 42, 0.08);
+    }
+
+    button:hover {
+      border-color: #aab4c2;
+      background: #ffffff;
+    }
+
+    .legend {
+      position: absolute;
+      left: 14px;
+      bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 13px;
+      box-shadow: 0 8px 24px rgba(23, 32, 42, 0.08);
+      z-index: 2;
+    }
+
+    .swatch {
+      width: 20px;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+
+      .stats {
+        grid-template-columns: repeat(3, minmax(76px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1 id="title">Mouse Trace</h1>
+      <div class="subtitle" id="runner">waiting</div>
+    </div>
+    <div class="stats" aria-live="polite">
+      <div class="stat">
+        <div class="label">events</div>
+        <div class="value" id="count">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">x</div>
+        <div class="value" id="x">-</div>
+      </div>
+      <div class="stat">
+        <div class="label">y</div>
+        <div class="value" id="y">-</div>
+      </div>
+      <div class="stat">
+        <div class="label">elapsed</div>
+        <div class="value" id="elapsed">0.00s</div>
+      </div>
+      <div class="stat">
+        <div class="label">rate</div>
+        <div class="value" id="rate">0.0/s</div>
+      </div>
+    </div>
+  </header>
+  <main class="stage">
+    <canvas id="trace"></canvas>
+    <div class="legend"><span class="swatch"></span><span id="bounds">0 x 0</span></div>
+    <div class="controls">
+      <button type="button" id="pause">Pause</button>
+      <button type="button" id="clear">Clear</button>
+      <button type="button" id="download">JSON</button>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const params = new URLSearchParams(location.search);
+      const label = params.get("label") || "window";
+      const run = params.get("run") || "local";
+      const title = document.getElementById("title");
+      const runner = document.getElementById("runner");
+      const canvas = document.getElementById("trace");
+      const ctx = canvas.getContext("2d");
+      const countEl = document.getElementById("count");
+      const xEl = document.getElementById("x");
+      const yEl = document.getElementById("y");
+      const elapsedEl = document.getElementById("elapsed");
+      const rateEl = document.getElementById("rate");
+      const boundsEl = document.getElementById("bounds");
+      const pauseButton = document.getElementById("pause");
+      const clearButton = document.getElementById("clear");
+      const downloadButton = document.getElementById("download");
+
+      let paused = false;
+      let dirty = true;
+      let runnerInfo = { state: "waiting" };
+      const points = [];
+      const state = {
+        count: 0,
+        firstAt: 0,
+        lastAt: 0,
+        totalDistance: 0,
+        bounds: {
+          minX: Infinity,
+          minY: Infinity,
+          maxX: -Infinity,
+          maxY: -Infinity,
+        },
+      };
+
+      title.textContent = `Mouse Trace ${label}`;
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.round(rect.width * ratio));
+        canvas.height = Math.max(1, Math.round(rect.height * ratio));
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        boundsEl.textContent = `${Math.round(rect.width)} x ${Math.round(rect.height)}`;
+        dirty = true;
+      }
+
+      function resetState() {
+        points.length = 0;
+        state.count = 0;
+        state.firstAt = 0;
+        state.lastAt = 0;
+        state.totalDistance = 0;
+        state.bounds.minX = Infinity;
+        state.bounds.minY = Infinity;
+        state.bounds.maxX = -Infinity;
+        state.bounds.maxY = -Infinity;
+        dirty = true;
+        renderStats();
+      }
+
+      function record(event) {
+        if (paused) return;
+        const now = performance.now();
+        const last = points[points.length - 1];
+        const point = {
+          t: now,
+          eventTime: event.timeStamp,
+          x: event.clientX,
+          y: event.clientY,
+          movementX: event.movementX,
+          movementY: event.movementY,
+          screenX: event.screenX,
+          screenY: event.screenY,
+          trusted: event.isTrusted,
+        };
+        if (!state.firstAt) state.firstAt = now;
+        if (last) {
+          const dx = point.x - last.x;
+          const dy = point.y - last.y;
+          state.totalDistance += Math.hypot(dx, dy);
+        }
+        state.lastAt = now;
+        state.count += 1;
+        state.bounds.minX = Math.min(state.bounds.minX, point.x);
+        state.bounds.minY = Math.min(state.bounds.minY, point.y);
+        state.bounds.maxX = Math.max(state.bounds.maxX, point.x);
+        state.bounds.maxY = Math.max(state.bounds.maxY, point.y);
+        points.push(point);
+        dirty = true;
+      }
+
+      function renderStats() {
+        const last = points[points.length - 1];
+        const elapsed = state.firstAt ? (state.lastAt - state.firstAt) / 1000 : 0;
+        const rate = elapsed > 0 ? state.count / elapsed : 0;
+        countEl.textContent = String(state.count);
+        xEl.textContent = last ? Math.round(last.x).toString() : "-";
+        yEl.textContent = last ? Math.round(last.y).toString() : "-";
+        elapsedEl.textContent = `${elapsed.toFixed(2)}s`;
+        rateEl.textContent = `${rate.toFixed(1)}/s`;
+        runner.textContent = `${runnerInfo.state || "waiting"} | run ${run}`;
+      }
+
+      function drawGrid(width, height) {
+        ctx.fillStyle = "#f4f6f8";
+        ctx.fillRect(0, 0, width, height);
+        ctx.strokeStyle = "#e1e6ee";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = 0; x <= width; x += 40) {
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+        }
+        for (let y = 0; y <= height; y += 40) {
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+        }
+        ctx.stroke();
+      }
+
+      function drawTrace() {
+        const rect = canvas.getBoundingClientRect();
+        drawGrid(rect.width, rect.height);
+        if (points.length < 2) return;
+        const gradient = ctx.createLinearGradient(0, 0, rect.width, rect.height);
+        gradient.addColorStop(0, "#147a73");
+        gradient.addColorStop(0.55, "#3454d1");
+        gradient.addColorStop(1, "#c23b22");
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i += 1) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        const first = points[0];
+        const last = points[points.length - 1];
+        ctx.fillStyle = "#147a73";
+        ctx.beginPath();
+        ctx.arc(first.x, first.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#c23b22";
+        ctx.beginPath();
+        ctx.arc(last.x, last.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function animate() {
+        if (dirty) {
+          renderStats();
+          drawTrace();
+          dirty = false;
+        }
+        requestAnimationFrame(animate);
+      }
+
+      function getSummary() {
+        const elapsedMs = state.firstAt ? state.lastAt - state.firstAt : 0;
+        return {
+          label,
+          run,
+          count: state.count,
+          elapsedMs,
+          eventsPerSecond: elapsedMs > 0 ? state.count / (elapsedMs / 1000) : 0,
+          totalDistance: state.totalDistance,
+          bounds: Number.isFinite(state.bounds.minX) ? { ...state.bounds } : null,
+          last: points[points.length - 1] || null,
+          runner: { ...runnerInfo },
+        };
+      }
+
+      function downloadTrace() {
+        const payload = JSON.stringify({ summary: getSummary(), points }, null, 2);
+        const blob = new Blob([payload], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `mouse-trace-${label}-${run}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      pauseButton.addEventListener("click", () => {
+        paused = !paused;
+        pauseButton.textContent = paused ? "Resume" : "Pause";
+      });
+      clearButton.addEventListener("click", resetState);
+      downloadButton.addEventListener("click", downloadTrace);
+      window.addEventListener("resize", resizeCanvas);
+      document.addEventListener("mousemove", record, { passive: true });
+
+      window.__mouseTraceReady = true;
+      window.__mouseTrace = {
+        points,
+        clear: resetState,
+        getSummary,
+        setRunner(info) {
+          runnerInfo = { ...runnerInfo, ...info };
+          dirty = true;
+        },
+      };
+
+      resizeCanvas();
+      animate();
+    })();
+  </script>
+</body>
+</html>
