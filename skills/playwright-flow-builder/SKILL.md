@@ -40,6 +40,7 @@ Inside the probe, send one JSON command per line:
 ```json
 {"action":"observe","limit":25}
 {"action":"click","selector":"button:has-text('Search')"}
+{"action":"human_click","selector":"button:has-text('立即签到')","speed_factor":1.0,"overshoot":"auto"}
 {"action":"fill","selector":"input[name='q']","value":"{{ inputs.keyword }}"}
 {"action":"screenshot","name":"after-search"}
 ```
@@ -65,6 +66,14 @@ With the probe, use:
 ```
 
 Only generate credential-filling steps when the user explicitly wants reusable credential inputs. In that case use flow inputs such as `{{ inputs.username }}` and `{{ inputs.password }}`; never hard-code secrets.
+
+## Human-Like Cursor (Anti-Bot)
+
+When a page does behavior fingerprinting (滑块拼图, reCAPTCHA, hCaptcha, Cloudflare Turnstile, fingerprint SDKs), use `human_click` instead of `click`. It drives `page.mouse` along a randomized Bézier path with minimum-jerk velocity, Fitts'-law duration, overshoot + correction, terminal tremor, and a realistic click dwell. See `docs/human-mouse-simulation.md` for the model and defaults, and `references/flow-authoring.md` for the action schema and Python-flow usage.
+
+- Prefer `human_click` over `click` on verification/login pages.
+- Do not mix `human_click` with raw `playwright` `mouse.move` on the same page — the cursor-position tracker would drift.
+- For 滑块 drag-puzzle verification (hold + drag), general `human_click` is not enough; plan it as a dedicated step and leave the drag primitive for a follow-up task until `human_drag` is implemented.
 
 ## Solidify The Flow
 

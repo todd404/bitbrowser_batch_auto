@@ -81,6 +81,26 @@ class ProbeSession:
             await self.page.locator(str(command["selector"])).click(timeout=command.get("timeout_ms"))
             return None
 
+        if action == "human_click":
+            from bitbrowser_auto.human import CursorTracker, MouseConfig, human_click
+
+            tracker: CursorTracker | None = getattr(self, "_human_cursor", None)
+            if tracker is None:
+                tracker = CursorTracker()
+                self._human_cursor = tracker  # type: ignore[attr-defined]
+            cfg = MouseConfig()
+            if "speed_factor" in command:
+                cfg = MouseConfig(**{**cfg.__dict__, "speed_factor": float(command["speed_factor"])}).clamp()
+            overshoot = command.get("overshoot", "auto")
+            result = await human_click(
+                self.page,
+                str(command["selector"]),
+                cfg=cfg,
+                tracker=tracker,
+                overshoot=overshoot,  # type: ignore[arg-type]
+            )
+            return result.as_trace()
+
         if action == "fill":
             await self.page.locator(str(command["selector"])).fill(
                 str(command.get("value", "")),
@@ -307,6 +327,7 @@ Commands are JSON objects, one per line:
   {"action":"observe","limit":25}
   {"action":"goto","url":"https://example.com"}
   {"action":"click","selector":"text=Login"}
+  {"action":"human_click","selector":"text=Login","speed_factor":1.0,"overshoot":"auto"}
   {"action":"fill","selector":"input[name='q']","value":"hello"}
   {"action":"press","selector":"input[name='q']","key":"Enter"}
   {"action":"wait_for","selector":".result","state":"visible","timeout_ms":30000}
