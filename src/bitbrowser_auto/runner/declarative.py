@@ -7,6 +7,7 @@ from typing import Any
 
 from bitbrowser_auto.observability.trace import maybe_capture_step_screenshot, step_metadata
 
+from ..human import CursorTracker, MouseConfig, human_click
 from .task import RunContext
 
 
@@ -26,6 +27,7 @@ CORE_ACTION_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "if_visible": ("selector", "then"),
     "if_text": ("selector", "text", "then"),
     "playwright": ("target", "method"),
+    "human_click": ("selector",),
 }
 
 ALLOWED_PLAYWRIGHT_TARGETS = {"page", "context", "locator", "keyboard", "mouse"}
@@ -68,6 +70,8 @@ ALLOWED_PLAYWRIGHT_METHODS: dict[str, set[str]] = {
 class DeclarativeRunner:
     screenshot_policy: str = "on_error"
     trace_steps: list[dict[str, Any]] = field(default_factory=list)
+    cursor_tracker: CursorTracker = field(default_factory=CursorTracker)
+    mouse_config: MouseConfig = field(default_factory=MouseConfig)
 
     async def run(self, ctx: RunContext, flow: dict[str, Any]) -> dict[str, Any]:
         outputs: dict[str, Any] = {}
@@ -196,6 +200,9 @@ class DeclarativeRunner:
         if action == "playwright":
             return await self._run_playwright(ctx, step, outputs)
 
+        if action == "human_click":
+            return await self._run_human_click(ctx, step, outputs)
+
         raise ValueError(f"Unsupported declarative action: {action}")
 
     async def _run_playwright(self, ctx: RunContext, step: dict[str, Any], outputs: dict[str, Any]) -> Any:
@@ -217,6 +224,29 @@ class DeclarativeRunner:
             outputs[str(save_as)] = await _serialize_result(result)
             return {"save_as": save_as}
         return await _traceable_result(result)
+
+    async def _run_human_click(
+        self,
+        ctx: RunContext,
+        step: dict[str, Any],
+        outputs: dict[str, Any],
+    ) -> Any:
+        selector = render_template(str(step["selector"]), ctx, outputs)
+        cfg = self.mouse_config
+        if "speed_factor" in step:
+            cfg = MouseConfig(**{**cfg.__dict__, "speed_factor": float(step["speed_factor"])})
+        cfg = cfg.clamp()
+        overshoot = step.get("overshoot", "auto")
+        if overshoot not in ("auto", True, False):
+            overshoot = "auto"
+        result = await human_click(
+            ctx.page,
+            selector,
+            cfg=cfg,
+            tracker=self.cursor_tracker,
+            overshoot=overshoot,  # type: ignore[arg-type]
+        )
+        return result.as_trace()
 
 
 def render_template(value: str, ctx: RunContext, outputs: dict[str, Any]) -> str:

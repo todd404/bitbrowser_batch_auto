@@ -10,6 +10,7 @@ import functools
 import json
 import math
 import socket
+import sys
 import threading
 import time
 import uuid
@@ -22,6 +23,20 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE_PATH = Path(__file__).with_name("mouse_trace_page.html")
+
+if str((ROOT / "src")) not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
+
+
+def _import_human_move():
+    """Import the human-cursor module lazily so the script works without Playwright."""
+    from bitbrowser_auto.human import CursorTracker, MouseConfig, human_move
+
+    return type(
+        "HumanMove",
+        (),
+        {"CursorTracker": CursorTracker, "MouseConfig": MouseConfig, "human_move": human_move},
+    )
 
 
 @dataclass
@@ -252,11 +267,27 @@ async def drive_mouse(
     )
     started = time.perf_counter()
     phase = 0 if target.label == "A" else math.pi / 3
-    for step in range(moves):
-        width, height = await viewport_size(page)
-        x, y = path_point(pattern, step, moves, width, height, phase)
-        await page.mouse.move(x, y, steps=steps_per_move)
-        await asyncio.sleep(interval_ms / 1000)
+    if pattern == "human":
+        # drive the same waypoints but bridge each gap with a human-like path
+        human_move_mod = _import_human_move()
+        tracker = human_move_mod.CursorTracker(start=(width * 0.5, height * 0.5))
+        await page.mouse.move(*tracker.position())
+        for step in range(moves):
+            wp_width, wp_height = await viewport_size(page)
+            x, y = path_point("sine", step, moves, wp_width, wp_height, phase)
+            await human_move_mod.human_move(
+                page,
+                (x, y),
+                tracker=tracker,
+                target_width_px=80.0,
+                cfg=human_move_mod.MouseConfig(speed_factor=1.0, overshoot_prob=0.5),
+            )
+    else:
+        for step in range(moves):
+            width, height = await viewport_size(page)
+            x, y = path_point(pattern, step, moves, width, height, phase)
+            await page.mouse.move(x, y, steps=steps_per_move)
+            await asyncio.sleep(interval_ms / 1000)
     finished = time.perf_counter()
     await page.evaluate(
         "info => window.__mouseTrace.setRunner(info)",
@@ -427,8 +458,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interval-ms", type=int, default=35)
     parser.add_argument("--steps-per-move", type=int, default=1)
     parser.add_argument("--start-delay", type=float, default=1.0)
-    parser.add_argument("--pattern-a", choices=["circle", "eight", "zigzag", "sine"], default="circle")
-    parser.add_argument("--pattern-b", choices=["circle", "eight", "zigzag", "sine"], default="eight")
+    parser.add_argument("--pattern-a", choices=["circle", "eight", "zigzag", "sine", "human"], default="circle")
+    parser.add_argument("--pattern-b", choices=["circle", "eight", "zigzag", "sine", "human"], default="human")
     parser.add_argument("--close-windows", action="store_true")
     parser.add_argument("--delete-created", action="store_true")
     return parser.parse_args()
