@@ -1,0 +1,27 @@
+tasks:
+  - id: "mock-parallel-01"
+    browser_id: "7cc3b396739b48aabe28a95538276018"
+    flow_type: "declarative"
+    flow: "mock_checkin_fixed"
+    batch_id: "mock-parallel"
+    inputs:
+      url: "file:///Users/czyk/Documents/bit_browser_auto/scripts/mock_checkin_page.html?window=01"
+      actor: "parallel-user-01"
+
+  - id: "mock-parallel-02"
+    browser_id: "e28a56b419a74be2b41b6d83ba5b85f7"
+    flow_type: "declarative"
+    flow: "mock_checkin_fixed"
+    batch_id: "mock-parallel"
+    inputs:
+      url: "file:///Users/czyk/Documents/bit_browser_auto/scripts/mock_checkin_page.html?window=02"
+      actor: "parallel-user-02"
+
+  - id: "mock-parallel-03"
+    browser_id: "88524e2aa0d14a5088ffe38fba5d8998"
+    flow_type: "declarative"
+    flow: "mock_checkin_fixed"
+    batch_id: "mock-parallel"
+    inputs:
+      url: "file:///Users/czyk/Documents/bit_browser_auto/scripts/mock_checkin_page.html?window=03"
+      actor: "parallel-user-03"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -57,7 +58,7 @@ def run_ui(*, config: AppConfig, mode: str, host: str, port: int) -> None:
     @ui.page("/")
     def build_root() -> None:
         _apply_theme(ui)
-        state: dict[str, Any] = {"page": "home", "selected_batch_id": None}
+        state: dict[str, Any] = {"page": "home", "selected_batch_id": None, "auto_refresh": None}
         content: Any | None = None
 
         def navigate(page: str, **kwargs: Any) -> None:
@@ -87,6 +88,7 @@ def run_ui(*, config: AppConfig, mode: str, host: str, port: int) -> None:
 
         def render() -> None:
             assert content is not None
+            state["auto_refresh"] = None
             _set_active_nav(nav_buttons, str(state["page"]))
             content.clear()
             with content:
@@ -111,6 +113,15 @@ def run_ui(*, config: AppConfig, mode: str, host: str, port: int) -> None:
             await service.tick_schedules()
             if status.get("state") in {"finished", "failed", "cancelled"} and not status.get("_notified"):
                 status["_notified"] = True
+            auto_refresh = state.get("auto_refresh")
+            if auto_refresh and not state.get("_auto_refreshing"):
+                state["_auto_refreshing"] = True
+                try:
+                    result = auto_refresh()
+                    if asyncio.iscoroutine(result):
+                        await result
+                finally:
+                    state["_auto_refreshing"] = False
 
         render()
         ui.timer(5.0, tick, active=True)
@@ -136,7 +147,17 @@ def _apply_theme(ui: Any) -> None:
         body { background: #f6f7fb; color: #111827; }
         .nicegui-content { padding: 0 !important; gap: 0 !important; max-width: none !important; }
         .app-shell { min-height: 100vh; }
-        .sidebar { background: #111827; color: white; width: 232px; }
+        .sidebar {
+            background: #111827;
+            color: white;
+            width: 232px;
+            position: sticky;
+            top: 0;
+            align-self: flex-start;
+            height: 100vh;
+            max-height: 100vh;
+            overflow-y: auto;
+        }
         .brand { line-height: 1.3; }
         .sidebar .nav-btn {
             height: 42px;
@@ -583,11 +604,9 @@ def _render_new_run(
                 schedule_holder.clear()
                 with schedule_holder:
                     if mode.value == "once":
-                        schedule_holder.run_at = ui.input("运行时间", placeholder="2026-07-03 09:30").props(
-                            "outlined"
-                        ).classes("w-72")
+                        schedule_holder.run_at = _datetime_input(ui, "运行时间").classes("w-72")
                     elif mode.value == "daily":
-                        schedule_holder.time = ui.input("时间", value="09:00").props("outlined").classes("w-40")
+                        schedule_holder.time = _time_input(ui, "时间", value="09:00").classes("w-40")
                         schedule_holder.days = ui.select(
                             WEEKDAY_OPTIONS,
                             value=[0, 1, 2, 3, 4],
@@ -595,7 +614,7 @@ def _render_new_run(
                             label="运行日",
                         ).props("outlined").classes("w-80")
                     elif mode.value == "weekly":
-                        schedule_holder.time = ui.input("时间", value="09:00").props("outlined").classes("w-40")
+                        schedule_holder.time = _time_input(ui, "时间", value="09:00").classes("w-40")
                         schedule_holder.days = ui.select(
                             WEEKDAY_OPTIONS,
                             value=[0],
@@ -770,39 +789,78 @@ def _render_results(
     state: dict[str, Any],
     navigate: Callable[..., None],
 ) -> None:
+    batch_list_holder: Any | None = None
+    detail_holder: Any | None = None
+
     def refresh() -> None:
-        content.clear()
-        with content:
-            _render_results(ui, service, artifact_dir, content, state, navigate)
+        render_data()
+
+    def select_batch(batch_id: str) -> None:
+        state["selected_batch_id"] = batch_id
+        state.pop("selected_task_id", None)
+        render_data()
 
     _toolbar(ui, "运行记录", "按一次运行查看结果、截图和失败处理。", refresh)
-    batches = service.list_batches(limit=100)
-    selected_id = state.get("selected_batch_id") or (batches[0]["id"] if batches else None)
-    if selected_id:
-        state["selected_batch_id"] = selected_id
-
     with ui.row().classes("w-full gap-4 items-start"):
-        with ui.column().classes("section-panel w-96 p-4 gap-3"):
-            ui.label("一次运行").classes("font-medium")
-            if batches:
-                for batch in batches:
-                    selected = batch["id"] == selected_id
-                    with ui.row().classes(
-                        f"soft-panel w-full p-3 items-center justify-between cursor-pointer {'border-primary' if selected else ''}"
-                    ).on("click", lambda _, b=batch: navigate("results", selected_batch_id=b["id"])):
-                        with ui.column().classes("gap-1"):
-                            ui.label(batch["name"]).classes("font-medium")
-                            ui.label(f"{batch['flow']} | {batch['window_count']} 个账号").classes(
-                                "text-xs text-slate-500"
-                            )
-                        ui.badge(_status_label(batch["status"]), color=_status_color(batch["status"]))
-            else:
-                _empty_state(ui, "还没有运行记录", "创建第一个任务后，这里会显示每次运行的结果。")
+        batch_list_holder = ui.column().classes("section-panel w-96 p-4 gap-3")
+        detail_holder = ui.column().classes("grow gap-4")
 
-        with ui.column().classes("grow gap-4"):
+    def render_batch_list(batches: list[dict[str, Any]], selected_id: str | None) -> None:
+        assert batch_list_holder is not None
+        batch_list_holder.clear()
+        with batch_list_holder:
+            ui.label("一次运行").classes("font-medium")
+            if not batches:
+                _empty_state(ui, "还没有运行记录", "创建第一个任务后，这里会显示每次运行的结果。")
+                return
+            for batch in batches:
+                selected = batch["id"] == selected_id
+                with ui.row().classes(
+                    f"soft-panel w-full p-3 items-center justify-between cursor-pointer {'border-primary' if selected else ''}"
+                ).on("click", lambda _, batch_id=batch["id"]: select_batch(batch_id)):
+                    with ui.column().classes("gap-1"):
+                        ui.label(batch["name"]).classes("font-medium")
+                        ui.label(f"{batch['flow']} | {batch['window_count']} 个账号").classes(
+                            "text-xs text-slate-500"
+                        )
+                    ui.badge(_status_label(batch["status"]), color=_status_color(batch["status"]))
+
+    def render_task_detail(holder: Any, task: dict[str, Any] | None) -> None:
+        holder.clear()
+        with holder:
+            if not task:
+                ui.label("选择一个账号查看截图、输出和运行记录。").classes("text-sm text-slate-500")
+                return
+            ui.label(f"账号窗口：{_short_text(task.get('browser_id'), 24)}").classes("font-medium")
+            if task.get("screenshot"):
+                url = _artifact_url(task["screenshot"], artifact_dir)
+                if url:
+                    ui.image(url).classes("w-full max-w-3xl border border-slate-200 rounded")
+            outputs = task.get("outputs") or {}
+            if outputs:
+                ui.label("输出").classes("font-medium")
+                ui.code(json.dumps(outputs, ensure_ascii=False, indent=2), language="json").classes(
+                    "w-full text-xs"
+                )
+            if task.get("last_error"):
+                ui.label("错误").classes("font-medium")
+                ui.label(str(task["last_error"])).classes("text-sm text-red-700")
+            if task.get("latest_run"):
+                run = task["latest_run"]
+                with ui.expansion("高级：运行记录", icon="receipt_long").classes("w-full"):
+                    ui.label(task["id"]).classes("font-medium mono")
+                    ui.code(json.dumps(run, ensure_ascii=False, indent=2), language="json").classes(
+                        "w-full text-xs"
+                    )
+
+    def render_detail(selected_id: str | None) -> None:
+        assert detail_holder is not None
+        detail_holder.clear()
+        with detail_holder:
             if not selected_id:
                 _empty_state(ui, "请选择一次运行", "详情会显示每个账号的状态、截图和错误。")
                 return
+
             detail = service.get_batch_detail(str(selected_id))
             batch = detail["batch"]
             counts = batch["counts"]
@@ -810,7 +868,9 @@ def _render_results(
                 with ui.row().classes("w-full items-start justify-between gap-3"):
                     with ui.column().classes("gap-1"):
                         ui.label(batch["name"]).classes("text-xl font-semibold")
-                        ui.label(f"任务模板：{batch['flow']} | 创建：{batch['created_at']}").classes("text-sm text-slate-500")
+                        ui.label(f"任务模板：{batch['flow']} | 创建：{batch['created_at']}").classes(
+                            "text-sm text-slate-500"
+                        )
                     with ui.row().classes("gap-2"):
                         ui.button(
                             "重跑失败",
@@ -850,34 +910,36 @@ def _render_results(
 
                 def show_task(event: Any) -> None:
                     row = event.args[1]
+                    state["selected_task_id"] = row["id"]
                     task = next(item for item in detail["tasks"] if item["id"] == row["id"])
-                    selected_task_detail.clear()
-                    with selected_task_detail:
-                        ui.label(f"账号窗口：{_short_text(task.get('browser_id'), 24)}").classes("font-medium")
-                        if task.get("screenshot"):
-                            url = _artifact_url(task["screenshot"], artifact_dir)
-                            if url:
-                                ui.image(url).classes("w-full max-w-3xl border border-slate-200 rounded")
-                        outputs = task.get("outputs") or {}
-                        if outputs:
-                            ui.label("输出").classes("font-medium")
-                            ui.code(json.dumps(outputs, ensure_ascii=False, indent=2), language="json").classes(
-                                "w-full text-xs"
-                            )
-                        if task.get("last_error"):
-                            ui.label("错误").classes("font-medium")
-                            ui.label(str(task["last_error"])).classes("text-sm text-red-700")
-                        if task.get("latest_run"):
-                            run = task["latest_run"]
-                            with ui.expansion("高级：运行记录", icon="receipt_long").classes("w-full"):
-                                ui.label(task["id"]).classes("font-medium mono")
-                                ui.code(json.dumps(run, ensure_ascii=False, indent=2), language="json").classes(
-                                    "w-full text-xs"
-                                )
+                    render_task_detail(selected_task_detail, task)
 
                 table.on("rowClick", show_task)
-                with selected_task_detail:
-                    ui.label("选择一个账号查看截图、输出和运行记录。").classes("text-sm text-slate-500")
+                selected_task_id = state.get("selected_task_id")
+                selected_task = next(
+                    (task for task in detail["tasks"] if task["id"] == selected_task_id),
+                    None,
+                )
+                if selected_task_id and not selected_task:
+                    state.pop("selected_task_id", None)
+                render_task_detail(selected_task_detail, selected_task)
+
+    def render_data() -> None:
+        batches = service.list_batches(limit=100)
+        selected_id = state.get("selected_batch_id")
+        batch_ids = {batch["id"] for batch in batches}
+        if selected_id not in batch_ids:
+            selected_id = batches[0]["id"] if batches else None
+            if selected_id:
+                state["selected_batch_id"] = selected_id
+            else:
+                state.pop("selected_batch_id", None)
+            state.pop("selected_task_id", None)
+        render_batch_list(batches, str(selected_id) if selected_id else None)
+        render_detail(str(selected_id) if selected_id else None)
+
+    state["auto_refresh"] = refresh
+    render_data()
 
 
 def _render_windows(ui: Any, service: UiCoreService, content: Any) -> None:
@@ -1173,6 +1235,82 @@ def _input_control(ui: Any, field: dict[str, Any]) -> Any:
     if field.get("help"):
         control.tooltip(str(field["help"]))
     return control
+
+
+def _datetime_input(ui: Any, label: str, value: str = "") -> Any:
+    current_date, current_time = _split_datetime_value(value)
+    selected = {"date": current_date, "time": current_time}
+    control = ui.input(label, value=value, placeholder="2026-07-03 09:30").props("outlined")
+
+    def sync_value() -> None:
+        control.set_value(f"{selected['date']} {selected['time']}")
+
+    def open_menu() -> None:
+        selected["date"], selected["time"] = _split_datetime_value(str(control.value or ""))
+        date_picker.set_value(selected["date"])
+        time_picker.set_value(selected["time"])
+        menu.open()
+
+    def set_date(event: Any) -> None:
+        selected["date"] = str(event.value)
+        sync_value()
+
+    def set_time(event: Any) -> None:
+        selected["time"] = str(event.value)
+        sync_value()
+
+    with control.add_slot("append"):
+        ui.icon("event").classes("cursor-pointer").on("click", open_menu).tooltip("选择日期和时间")
+        with ui.menu() as menu:
+            with ui.column().classes("p-2 gap-2"):
+                date_picker = ui.date(value=current_date, on_change=set_date)
+                time_picker = ui.time(value=current_time, on_change=set_time)
+                with ui.row().classes("w-full justify-end"):
+                    ui.button("确定", on_click=menu.close).props("flat no-caps")
+    return control
+
+
+def _time_input(ui: Any, label: str, value: str = "09:00") -> Any:
+    initial = _normalize_time_value(value)
+    control = ui.input(label, value=initial, placeholder="09:00").props("outlined")
+
+    def open_menu() -> None:
+        time_picker.set_value(_normalize_time_value(str(control.value or initial)))
+        menu.open()
+
+    def set_time(event: Any) -> None:
+        control.set_value(str(event.value))
+        menu.close()
+
+    with control.add_slot("append"):
+        ui.icon("schedule").classes("cursor-pointer").on("click", open_menu).tooltip("选择时间")
+        with ui.menu() as menu:
+            with ui.column().classes("p-2 gap-2"):
+                time_picker = ui.time(value=initial, on_change=set_time)
+    return control
+
+
+def _split_datetime_value(value: str) -> tuple[str, str]:
+    text = value.strip().replace("T", " ")
+    if text:
+        for pattern in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                parsed = datetime.strptime(text, pattern)
+                return parsed.strftime("%Y-%m-%d"), parsed.strftime("%H:%M")
+            except ValueError:
+                pass
+    now = datetime.now()
+    return now.strftime("%Y-%m-%d"), "09:00"
+
+
+def _normalize_time_value(value: str) -> str:
+    text = value.strip()
+    for pattern in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(text, pattern).strftime("%H:%M")
+        except ValueError:
+            pass
+    return "09:00"
 
 
 def _collect_trigger(mode: str, holder: Any) -> dict[str, Any]:

@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BitBrowser 并行流程模拟页</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #172033;
+        --muted: #5e6b80;
+        --line: #d7dde8;
+        --panel: #ffffff;
+        --page: #eef3f8;
+        --accent: #157f6f;
+        --accent-strong: #0d5f54;
+        --warn: #9a5b00;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          linear-gradient(135deg, rgba(21, 127, 111, 0.12), transparent 34%),
+          linear-gradient(315deg, rgba(58, 93, 174, 0.14), transparent 36%),
+          var(--page);
+      }
+
+      main {
+        width: min(920px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 44px 0;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 22px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(28px, 4vw, 42px);
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .status-pill {
+        flex: 0 0 auto;
+        min-width: 132px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 9px 16px;
+        background: rgba(255, 255, 255, 0.78);
+        text-align: center;
+        font-weight: 700;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.08fr) minmax(260px, 0.72fr);
+        gap: 18px;
+      }
+
+      section,
+      aside {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: 0 16px 50px rgba(23, 32, 51, 0.08);
+      }
+
+      section {
+        padding: 24px;
+      }
+
+      aside {
+        padding: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      input {
+        width: 100%;
+        height: 44px;
+        border: 1px solid #b8c2d3;
+        border-radius: 6px;
+        padding: 0 12px;
+        color: var(--ink);
+        font: inherit;
+        background: #fff;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      button {
+        min-height: 42px;
+        border: 0;
+        border-radius: 6px;
+        padding: 0 16px;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      button.primary {
+        color: #fff;
+        background: var(--accent);
+      }
+
+      button.primary:hover {
+        background: var(--accent-strong);
+      }
+
+      button.secondary {
+        border: 1px solid var(--line);
+        color: var(--ink);
+        background: #fff;
+      }
+
+      .work-panel {
+        display: none;
+        margin-top: 22px;
+        border-top: 1px solid var(--line);
+        padding-top: 20px;
+      }
+
+      .work-panel[data-visible="true"] {
+        display: block;
+      }
+
+      .success {
+        display: none;
+        margin-top: 20px;
+        border: 1px solid rgba(21, 127, 111, 0.34);
+        border-radius: 8px;
+        padding: 16px;
+        background: rgba(21, 127, 111, 0.08);
+      }
+
+      .success[data-visible="true"] {
+        display: block;
+      }
+
+      .success strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--accent-strong);
+      }
+
+      dl {
+        display: grid;
+        grid-template-columns: 92px 1fr;
+        gap: 10px 12px;
+        margin: 16px 0 0;
+      }
+
+      dt {
+        color: var(--muted);
+      }
+
+      dd {
+        margin: 0;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+      }
+
+      .log {
+        min-height: 144px;
+        margin-top: 14px;
+        border: 1px solid #c9d2df;
+        border-radius: 6px;
+        padding: 12px;
+        background: #f7fafc;
+        color: #29364b;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      .note {
+        margin-top: 12px;
+        color: var(--warn);
+        font-size: 14px;
+      }
+
+      @media (max-width: 720px) {
+        header {
+          display: block;
+        }
+
+        .status-pill {
+          display: inline-block;
+          margin-top: 16px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>BitBrowser 并行流程模拟页</h1>
+          <p>用于验证三个独立浏览器窗口同时执行固定流程、写入输入、点击按钮、等待完成状态并产出截图。</p>
+        </div>
+        <div class="status-pill" data-testid="status-pill">待执行</div>
+      </header>
+
+      <div class="grid">
+        <section aria-labelledby="task-title">
+          <h2 id="task-title">模拟签到任务</h2>
+          <p>页面状态只保存在当前浏览器窗口内，适合测试窗口隔离与并发调度。</p>
+
+          <form data-testid="mock-form">
+            <label for="operator">执行账号</label>
+            <input id="operator" data-testid="operator-input" name="operator" autocomplete="off" />
+            <div class="actions">
+              <button class="primary" type="button" data-testid="start-button">开始任务</button>
+              <button class="secondary" type="button" data-testid="reset-button">重置</button>
+            </div>
+          </form>
+
+          <div class="work-panel" data-testid="work-panel" data-visible="false">
+            <p data-testid="work-summary">任务已准备，等待确认提交。</p>
+            <div class="actions">
+              <button class="primary" type="button" data-testid="confirm-button">确认提交</button>
+            </div>
+          </div>
+
+          <div class="success" data-testid="success-card" data-visible="false">
+            <strong>模拟流程已完成</strong>
+            <p data-testid="success-message">等待执行。</p>
+          </div>
+        </section>
+
+        <aside aria-labelledby="receipt-title">
+          <h2 id="receipt-title">执行回执</h2>
+          <dl>
+            <dt>窗口标记</dt>
+            <dd data-testid="window-label">未设置</dd>
+            <dt>执行账号</dt>
+            <dd data-testid="operator-label">未填写</dd>
+            <dt>回执编号</dt>
+            <dd data-testid="receipt-code">未生成</dd>
+          </dl>
+          <div class="log" data-testid="event-log">等待流程开始。</div>
+          <p class="note">URL 可附加 ?window=01，用于区分三个并行窗口。</p>
+        </aside>
+      </div>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const windowLabel = params.get("window") || "local";
+      const startedAt = new Date().toLocaleString();
+      const statusPill = document.querySelector("[data-testid='status-pill']");
+      const operatorInput = document.querySelector("[data-testid='operator-input']");
+      const operatorLabel = document.querySelector("[data-testid='operator-label']");
+      const windowLabelNode = document.querySelector("[data-testid='window-label']");
+      const receiptCode = document.querySelector("[data-testid='receipt-code']");
+      const workPanel = document.querySelector("[data-testid='work-panel']");
+      const workSummary = document.querySelector("[data-testid='work-summary']");
+      const successCard = document.querySelector("[data-testid='success-card']");
+      const successMessage = document.querySelector("[data-testid='success-message']");
+      const eventLog = document.querySelector("[data-testid='event-log']");
+
+      function appendLog(message) {
+        const next = `[${new Date().toLocaleTimeString()}] ${message}`;
+        eventLog.textContent = eventLog.textContent === "等待流程开始。" ? next : `${eventLog.textContent}\n${next}`;
+      }
+
+      function setStatus(text) {
+        statusPill.textContent = text;
+      }
+
+      windowLabelNode.textContent = windowLabel;
+      appendLog(`页面载入: ${startedAt}`);
+
+      document.querySelector("[data-testid='start-button']").addEventListener("click", () => {
+        const operator = operatorInput.value.trim() || "未命名账号";
+        operatorLabel.textContent = operator;
+        workSummary.textContent = `${operator} 已进入模拟任务，窗口标记 ${windowLabel}。`;
+        workPanel.dataset.visible = "true";
+        successCard.dataset.visible = "false";
+        receiptCode.textContent = "待提交";
+        setStatus("待确认");
+        appendLog(`开始任务: ${operator}`);
+      });
+
+      document.querySelector("[data-testid='confirm-button']").addEventListener("click", () => {
+        const operator = operatorInput.value.trim() || "未命名账号";
+        setStatus("处理中");
+        appendLog("提交确认，模拟异步处理。");
+        window.setTimeout(() => {
+          const code = `MOCK-${windowLabel}-${Date.now().toString().slice(-6)}`;
+          receiptCode.textContent = code;
+          successMessage.textContent = `${operator} 在窗口 ${windowLabel} 完成固定流程，回执 ${code}。`;
+          successCard.dataset.visible = "true";
+          setStatus("已完成");
+          appendLog(`完成: ${code}`);
+        }, 450);
+      });
+
+      document.querySelector("[data-testid='reset-button']").addEventListener("click", () => {
+        operatorInput.value = "";
+        operatorLabel.textContent = "未填写";
+        receiptCode.textContent = "未生成";
+        workPanel.dataset.visible = "false";
+        successCard.dataset.visible = "false";
+        eventLog.textContent = "等待流程开始。";
+        setStatus("待执行");
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,37 @@
+name: "suixiang_checkin"
+display_name: "随想仪表盘签到"
+description: "打开随想仪表盘，若当天尚未签到则执行签到，并保存最终截图。"
+category: "网页访问"
+version: 1
+inputs:
+  url:
+    type: string
+    label: "目标网址"
+    required: true
+    default: "https://sui-xiang.com/dashboard"
+    placeholder: "https://sui-xiang.com/dashboard"
+    help: "要求所选 BitBrowser 账号窗口已经处于可用登录状态。"
+steps:
+  - action: goto
+    url: "{{ inputs.url }}"
+  - action: wait_for
+    selector: "text=签到机制说明"
+    timeout_ms: 30000
+  - action: if_visible
+    selector: "button:has-text('立即签到')"
+    timeout_ms: 5000
+    then:
+      - action: human_click
+        selector: "button:has-text('立即签到')"
+        speed_factor: 1.0
+        overshoot: "auto"
+  - action: wait_for
+    selector: "text=今日已签到"
+    timeout_ms: 30000
+  - action: assert_text
+    selector: "body"
+    text: "今日已签到"
+    timeout_ms: 30000
+  - action: screenshot
+    name: "final"
+    full_page: true
