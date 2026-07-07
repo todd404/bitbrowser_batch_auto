@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "bitbrowser-auto"
 version = "0.1.0"
 description = "Local BitBrowser automation runner with Playwright CDP control."
-readme = "docs/project-framework.md"
+readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
   "httpx>=0.27",
