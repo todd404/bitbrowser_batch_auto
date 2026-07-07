@@ -6,9 +6,6 @@ __pycache__/
 .mypy_cache/
 .DS_Store
 
-.claude/
-.codex/
-
 data/
 artifacts/
 scratch/

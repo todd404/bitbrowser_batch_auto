@@ -1,0 +1,4 @@
+interface:
+  display_name: "Playwright Flow Builder"
+  short_description: "Turn browser tasks into reusable flows"
+  default_prompt: "Use $playwright-flow-builder to explore a web task with Playwright and save it as a reusable flow."
