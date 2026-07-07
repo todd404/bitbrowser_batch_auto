@@ -1,6 +1,7 @@
 # Flow Authoring Reference
 
 Use this reference after triggering `$playwright-flow-builder` when turning a browser task into a reusable flow.
+Run project commands from the repository root with `.venv/bin/python` so the skill uses the project's virtualenv instead of a system `python`.
 
 ## Flow Choice
 
@@ -136,7 +137,7 @@ Example:
 Validate passthrough flows with:
 
 ```bash
-python -m bitbrowser_auto validate-flow <flow-name>
+.venv/bin/python -m bitbrowser_auto validate-flow <flow-name>
 ```
 
 ## Python Flow Shape
@@ -246,8 +247,8 @@ Python spec:
 Useful commands:
 
 ```bash
-python skills/playwright-flow-builder/scripts/materialize_flow.py --spec spec.json
-python skills/playwright-flow-builder/scripts/materialize_flow.py --spec - --overwrite
+.venv/bin/python skills/playwright-flow-builder/scripts/materialize_flow.py --spec spec.json
+.venv/bin/python skills/playwright-flow-builder/scripts/materialize_flow.py --spec - --overwrite
 ```
 
 ## Probe Commands
@@ -285,5 +286,5 @@ Before delivering:
 - Secrets are not written to files, logs, or chat.
 - Flow inputs cover values the user will change.
 - Final step proves success with screenshot, extraction, or assertion.
-- Declarative flows pass `python -m bitbrowser_auto validate-flow <name>`.
-- Python flows pass `python -m py_compile flows/py/<name>.py`.
+- Declarative flows pass `.venv/bin/python -m bitbrowser_auto validate-flow <name>`.
+- Python flows pass `.venv/bin/python -m py_compile flows/py/<name>.py`.

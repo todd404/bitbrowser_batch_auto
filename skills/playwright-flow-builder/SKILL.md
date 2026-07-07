@@ -8,6 +8,7 @@ description: Turn a user's natural-language browser workflow into a reusable Bit
 Use this skill to explore a live website with Playwright, complete the user's described browser task, and solidify the working procedure as a reusable project flow.
 
 Work from the repository root so bundled scripts can import `src/bitbrowser_auto` and write to the existing `flows/` and `artifacts/` directories.
+Use the repository virtualenv Python, `.venv/bin/python`, for project commands, bundled scripts, validation, and flow runs. Do not rely on a bare `python` from `PATH`.
 
 ## First Moves
 
@@ -21,7 +22,7 @@ Work from the repository root so bundled scripts can import `src/bitbrowser_auto
 Use any reliable browser-control surface available to the agent. If no native browser tool is available, use the bundled probe:
 
 ```bash
-python skills/playwright-flow-builder/scripts/playwright_probe.py \
+.venv/bin/python skills/playwright-flow-builder/scripts/playwright_probe.py \
   --browser-id <browser-id> \
   --url <start-url> \
   --artifact-dir artifacts/flow-authoring/<flow-name>
@@ -30,7 +31,7 @@ python skills/playwright-flow-builder/scripts/playwright_probe.py \
 If BitBrowser is not required, launch a normal headed Chromium session:
 
 ```bash
-python skills/playwright-flow-builder/scripts/playwright_probe.py \
+.venv/bin/python skills/playwright-flow-builder/scripts/playwright_probe.py \
   --url <start-url> \
   --artifact-dir artifacts/flow-authoring/<flow-name>
 ```
@@ -88,7 +89,7 @@ After the task succeeds manually:
 Declarative materialization example:
 
 ```bash
-python skills/playwright-flow-builder/scripts/materialize_flow.py --spec - --overwrite <<'JSON'
+.venv/bin/python skills/playwright-flow-builder/scripts/materialize_flow.py --spec - --overwrite <<'JSON'
 {
   "flow_type": "declarative",
   "name": "search_example",
@@ -113,7 +114,7 @@ JSON
 Python materialization example:
 
 ```bash
-python skills/playwright-flow-builder/scripts/materialize_flow.py --spec python-flow-spec.json --overwrite
+.venv/bin/python skills/playwright-flow-builder/scripts/materialize_flow.py --spec python-flow-spec.json --overwrite
 ```
 
 ## Validate And Run
@@ -121,19 +122,19 @@ python skills/playwright-flow-builder/scripts/materialize_flow.py --spec python-
 For declarative flows:
 
 ```bash
-python -m bitbrowser_auto validate-flow <flow-name>
+.venv/bin/python -m bitbrowser_auto validate-flow <flow-name>
 ```
 
 For Python flows:
 
 ```bash
-python -m py_compile flows/py/<flow-name>.py
+.venv/bin/python -m py_compile flows/py/<flow-name>.py
 ```
 
 When a safe browser/account is available, do one end-to-end run:
 
 ```bash
-python -m bitbrowser_auto run-one \
+.venv/bin/python -m bitbrowser_auto run-one \
   --browser-id <browser-id> \
   --flow-type declarative \
   --flow <flow-name> \
