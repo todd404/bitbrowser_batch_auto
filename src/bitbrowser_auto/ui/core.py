@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import threading
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -22,6 +23,7 @@ class UiCoreService:
         self.config = config
         self.scheduler_task: asyncio.Task[dict[str, Any]] | None = None
         self.scheduler_status: dict[str, Any] = {"state": "idle"}
+        self._schedule_tick_lock = threading.Lock()
 
     async def check_startup(self) -> dict[str, Any]:
         result = await self.check_environment()
@@ -392,50 +394,57 @@ class UiCoreService:
             return storage.delete_schedule(schedule_id)
 
     async def tick_schedules(self) -> dict[str, Any]:
-        now = _now_iso()
-        created = 0
-        skipped = 0
-        batch_ids = []
-        with self._storage() as storage:
-            due = storage.due_schedules(now)
-        for schedule in due:
-            scheduler_running = bool(self.scheduler_task and not self.scheduler_task.done())
-            if scheduler_running and schedule.get("overlap_policy") == "skip":
-                next_run_at = _next_run_at(schedule["trigger"], after=_now() + timedelta(seconds=1))
+        if not self._schedule_tick_lock.acquire(blocking=False):
+            return {"created": 0, "skipped": 0, "batch_ids": [], "state": "busy"}
+
+        try:
+            now = _now()
+            now_iso = now.isoformat(timespec="seconds")
+            created = 0
+            skipped = 0
+            batch_ids = []
+            with self._storage() as storage:
+                due = storage.due_schedules(now_iso)
+            for schedule in due:
+                scheduler_running = bool(self.scheduler_task and not self.scheduler_task.done())
+                if scheduler_running and schedule.get("overlap_policy") == "skip":
+                    next_run_at = _next_run_after_trigger(schedule["trigger"], after=now)
+                    with self._storage() as storage:
+                        storage.update_schedule_after_run(
+                            schedule["id"],
+                            last_run_at=now_iso,
+                            next_run_at=next_run_at,
+                            enabled=next_run_at is not None,
+                        )
+                    skipped += 1
+                    continue
+                result = await self.create_batch_run(
+                    name=f"{schedule['name']} {now.strftime('%Y-%m-%d %H:%M')}",
+                    source="schedule",
+                    flow_type=schedule["flow_type"],
+                    flow=schedule["flow"],
+                    browser_ids=schedule["browser_ids"],
+                    inputs=schedule["inputs"],
+                    per_window_inputs=schedule["per_window_inputs"],
+                    options=schedule["run_options"],
+                    schedule_id=schedule["id"],
+                    run_now=False,
+                )
+                batch_ids.append(result["id"])
+                next_run_at = _next_run_after_trigger(schedule["trigger"], after=now)
                 with self._storage() as storage:
                     storage.update_schedule_after_run(
                         schedule["id"],
-                        last_run_at=now,
+                        last_run_at=now_iso,
                         next_run_at=next_run_at,
                         enabled=next_run_at is not None,
                     )
-                skipped += 1
-                continue
-            result = await self.create_batch_run(
-                name=f"{schedule['name']} {_now().strftime('%Y-%m-%d %H:%M')}",
-                source="schedule",
-                flow_type=schedule["flow_type"],
-                flow=schedule["flow"],
-                browser_ids=schedule["browser_ids"],
-                inputs=schedule["inputs"],
-                per_window_inputs=schedule["per_window_inputs"],
-                options=schedule["run_options"],
-                schedule_id=schedule["id"],
-                run_now=False,
-            )
-            batch_ids.append(result["id"])
-            next_run_at = _next_run_at(schedule["trigger"], after=_now() + timedelta(seconds=1))
-            with self._storage() as storage:
-                storage.update_schedule_after_run(
-                    schedule["id"],
-                    last_run_at=now,
-                    next_run_at=next_run_at,
-                    enabled=next_run_at is not None,
-                )
-            created += 1
-        if created:
-            await self.start_scheduler(batch_id=batch_ids[0] if batch_ids else None)
-        return {"created": created, "skipped": skipped, "batch_ids": batch_ids}
+                created += 1
+            if created:
+                await self.start_scheduler(batch_id=batch_ids[0] if batch_ids else None)
+            return {"created": created, "skipped": skipped, "batch_ids": batch_ids}
+        finally:
+            self._schedule_tick_lock.release()
 
     async def start_scheduler(
         self,
@@ -702,6 +711,12 @@ def _next_run_at(trigger: dict[str, Any], *, after: datetime | None = None) -> s
             if candidate > after and candidate.weekday() in days:
                 return candidate.isoformat(timespec="seconds")
     return None
+
+
+def _next_run_after_trigger(trigger: dict[str, Any], *, after: datetime) -> str | None:
+    if str(trigger.get("type") or "manual") == "once":
+        return None
+    return _next_run_at(trigger, after=after + timedelta(seconds=1))
 
 
 def _parse_time(value: Any) -> tuple[int, int]:
